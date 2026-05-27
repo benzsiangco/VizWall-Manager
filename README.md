@@ -48,7 +48,7 @@ Built using **Tauri v2**, **React**, and **TypeScript**, it runs directly on you
 - **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, Framer Motion, Zustand
 - **Backend / Desktop Wrapper**: Tauri v2, Rust
 - **Database**: SQLite (local database file `vizwall.db` stored in app data folder)
-- **External Binaries**: `ffmpeg` (for media processing and thumbnail generation), `llama-cli` (sidecar binary integrations)
+- **External Binaries**: `ffmpeg` (for media processing and thumbnail generation)
 
 ---
 
