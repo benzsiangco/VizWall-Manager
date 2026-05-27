@@ -1,0 +1,30 @@
+[package]
+name = "vizwall-workspace"
+version = "0.1.0"
+description = "AI-powered creative file manager and workspace for creative professionals"
+authors = ["Antigravity"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["protocol-asset"] }
+tauri-plugin-dialog = { version = "2.0.0" }
+drag = { version = "2.1" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+rusqlite = { version = "0.31.0", features = ["bundled"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+open = { version = "5.1" }
+sysinfo = { version = "0.30" }
+
+[profile.release]
+panic = "abort" # Strip expensive panic handlers
+codegen-units = 1 # Optimize for size
+lto = true # Link Time Optimization
+opt-level = "z" # Optimize for size
+strip = true # Strip symbols
