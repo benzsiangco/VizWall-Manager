@@ -1,9 +1,13 @@
-# 🎬 VizWall Workspace
+<p align="center">
+  <img src="vizwall-logo.png" alt="VizWall Workspace Logo" width="600" />
+</p>
 
-[![Tauri](https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri&style=flat-square)](https://tauri.app/)
-[![React](https://img.shields.io/badge/React-18.3-cyan?logo=react&style=flat-square)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue?logo=typescript&style=flat-square)](https://www.typescriptlang.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-3.x-lightblue?logo=sqlite&style=flat-square)](https://sqlite.org/)
+<p align="center">
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri&style=flat-square" alt="Tauri" /></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-18.3-cyan?logo=react&style=flat-square" alt="React" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.4-blue?logo=typescript&style=flat-square" alt="TypeScript" /></a>
+  <a href="https://sqlite.org/"><img src="https://img.shields.io/badge/SQLite-3.x-lightblue?logo=sqlite&style=flat-square" alt="SQLite" /></a>
+</p>
 
 **VizWall Workspace** is a high-performance, local-first desktop application designed specifically for video editors, animators, and post-production professionals. It simplifies file organization, automates folder structures, tracks revision workflows, and helps manage client projects from ingestion to final delivery.
 
