@@ -710,7 +710,7 @@ export const AssetCard: React.FC<AssetCardProps> = React.memo(({
         onMouseLeave={onLeave}
         className={cn(
           "bg-[#0e0c1a]/80 rounded-xl border overflow-hidden select-none group transition-all duration-200",
-          scrubMode ? "cursor-col-resize" : "cursor-grab",
+          scrubMode ? "cursor-col-resize" : "cursor-grab active:cursor-grabbing hover:cursor-pointer",
           isSelected ? "border-violet-500/60 ring-1 ring-violet-500/20" : "border-white/5 hover:border-white/15"
         )}
       >

@@ -195,7 +195,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         "rounded-lg overflow-hidden group relative touch-none select-none",
         isDragging
           ? "opacity-30 cursor-grabbing bg-[#12101e]/40"
-          : "cursor-grab bg-[#12101e]/60 hover:bg-[#151224]/80 transition-colors"
+          : "cursor-grab active:cursor-grabbing hover:cursor-pointer bg-[#12101e]/60 hover:bg-[#151224]/80 transition-colors"
       )}
     >
       {/* Drag affordance */}
