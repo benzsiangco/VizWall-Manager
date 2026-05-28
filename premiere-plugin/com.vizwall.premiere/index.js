@@ -1296,7 +1296,7 @@ async function importWholeProject() {
     }
     
     // Confirm import with user
-    const msg = `Import all ${validAssets.length} media files and create their corresponding folder structure in Premiere Pro? (Non-media files will be ignored)`;
+    const msg = `Import all ${validAssets.length} media files and organize them into standard project bins (Sequences, Footage, Audio, etc.) in Premiere Pro? (Non-media files will be ignored)`;
     if (!confirm(msg)) return;
     
     // Get modal components
@@ -1317,6 +1317,14 @@ async function importWholeProject() {
     closeBtn.onclick = () => {
         importModal.style.display = 'none';
     };
+
+    // Create standard structure bins first (Sequences, Footage, Audio, Graphics, Exports)
+    try {
+        progressStatus.textContent = "Creating standard project folder structure...";
+        await evalScriptAsync(`createStandardBins()`);
+    } catch (err) {
+        console.error("Failed to create standard bins structure:", err);
+    }
     
     let successCount = 0;
     let failCount = 0;
@@ -1331,8 +1339,25 @@ async function importWholeProject() {
         progressFile.textContent = asset.name;
         
         const relativeFolder = getAssetRelativeFolder(asset);
+        
+        // Map asset categories to standard structure bins
+        let folderPrefix = "";
+        const cat = asset.category;
+        if (cat === "A_ROLL" || cat === "B_ROLL") {
+            folderPrefix = "02 Footage";
+        } else if (cat === "AUDIO" || cat === "MUSIC" || cat === "SFX" || cat === "VOICEOVER") {
+            folderPrefix = "03 Audio";
+        } else if (cat === "GRAPHICS" || cat === "THUMBNAILS") {
+            folderPrefix = "04 Graphics";
+        } else if (cat === "EXPORTS") {
+            folderPrefix = "05 Exports";
+        } else {
+            folderPrefix = "02 Footage"; // Default fallback
+        }
+        
+        const finalFolder = relativeFolder ? `${folderPrefix}/${relativeFolder}` : folderPrefix;
         const escapedPath = escapePath(asset.path);
-        const escapedFolder = escapePath(relativeFolder);
+        const escapedFolder = escapePath(finalFolder);
         
         try {
             // Call individual file import in ExtendScript

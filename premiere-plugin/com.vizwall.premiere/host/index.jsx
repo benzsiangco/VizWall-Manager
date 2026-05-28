@@ -129,3 +129,31 @@ function importAllAssets(serializedData) {
         return "Error: " + e.toString();
     }
 }
+
+function createStandardBins() {
+    try {
+        if (!app.project) {
+            return "Error: No project open in Premiere Pro.";
+        }
+        var bins = ["01 Sequences", "02 Footage", "03 Audio", "04 Graphics", "05 Exports"];
+        var root = app.project.rootItem;
+        for (var i = 0; i < bins.length; i++) {
+            var binName = bins[i];
+            var found = false;
+            for (var j = 0; j < root.children.numItems; j++) {
+                var child = root.children[j];
+                if (child.type === ProjectItemType.BIN && child.name === binName) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                root.createBin(binName);
+            }
+        }
+        return "Success";
+    } catch (e) {
+        return "Error: " + e.toString();
+    }
+}
+
