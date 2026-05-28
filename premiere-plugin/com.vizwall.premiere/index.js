@@ -36,20 +36,78 @@ let openFolders = new Set(); // Stores expanded folder tree paths
 const audioWaveforms = {}; // Cache decoded waveform data and playback state: { id: { data, duration } }
 const activeAudioPlayers = {}; // Cache active HTML5 Audio elements
 
-// Category → icon & styling config matching standalone app
-const CATEGORY_ICON_MAP = {
-    SFX:           { icon: '🎵', color: '#fb923c' }, // text-orange-400
-    MUSIC:         { icon: '🎵', color: '#34d399' }, // text-emerald-400
-    AUDIO:         { icon: '🎵', color: '#60a5fa' }, // text-blue-400
-    VOICEOVER:     { icon: '🎵', color: '#38bdf8' }, // text-sky-400
-    A_ROLL:        { icon: '🎥', color: '#f87171' }, // text-red-400
-    B_ROLL:        { icon: '🎥', color: '#c084fc' }, // text-violet-400
-    EXPORTS:       { icon: '💿', color: '#2dd4bf' }, // text-teal-400
-    GRAPHICS:      { icon: '🎨', color: '#22d3ee' }, // text-cyan-400
-    THUMBNAILS:    { icon: '🎨', color: '#f472b6' }, // text-pink-400
-    PROJECT_FILES: { icon: '📝', color: '#fbbf24' }, // text-amber-400
-    ARCHIVE:       { icon: '📦', color: '#94a3b8' }, // text-slate-400
+// Lucide SVG rendering helpers
+const SVGS = {
+    Music: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-music" style="display:inline-block; vertical-align:middle;"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
+    Video: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-video" style="display:inline-block; vertical-align:middle;"><path d="m22 8-6 4 6 4V8Z"></path><rect width="14" height="12" x="2" y="6" rx="2" ry="2"></rect></svg>`,
+    HardDrive: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hard-drive" style="display:inline-block; vertical-align:middle;"><rect width="20" height="8" x="2" y="14" rx="2"></rect><path d="M6 18h.01M10 18h.01M2 14 6 4h12l4 10"></path></svg>`,
+    ImageIcon: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image" style="display:inline-block; vertical-align:middle;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>`,
+    FileText: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text" style="display:inline-block; vertical-align:middle;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"></path></svg>`,
+    Archive: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-archive" style="display:inline-block; vertical-align:middle;"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"></path></svg>`,
+    Folder: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder" style="display:inline-block; vertical-align:middle;"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>`,
+    FolderOpen: (color, width = 13, height = 13) => `<svg viewBox="0 0 24 24" width="${width}" height="${height}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open" style="display:inline-block; vertical-align:middle;"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"></path></svg>`
 };
+
+const CATEGORY_STYLE_MAP = {
+    SFX:           { svg: 'Music',     color: '#fb923c' }, // text-orange-400
+    MUSIC:         { svg: 'Music',     color: '#34d399' }, // text-emerald-400
+    AUDIO:         { svg: 'Music',     color: '#60a5fa' }, // text-blue-400
+    VOICEOVER:     { svg: 'Music',     color: '#38bdf8' }, // text-sky-400
+    A_ROLL:        { svg: 'Video',     color: '#f87171' }, // text-red-400
+    B_ROLL:        { svg: 'Video',     color: '#c084fc' }, // text-violet-400
+    EXPORTS:       { svg: 'HardDrive', color: '#2dd4bf' }, // text-teal-400
+    GRAPHICS:      { svg: 'ImageIcon', color: '#22d3ee' }, // text-cyan-400
+    THUMBNAILS:    { svg: 'ImageIcon', color: '#f472b6' }, // text-pink-400
+    PROJECT_FILES: { svg: 'FileText',  color: '#fbbf24' }, // text-amber-400
+    ARCHIVE:       { svg: 'Archive',   color: '#94a3b8' }, // text-slate-400
+};
+
+function getCategoryIcon(category, width = 13, height = 13) {
+    const cfg = CATEGORY_STYLE_MAP[category];
+    if (cfg && SVGS[cfg.svg]) {
+        return SVGS[cfg.svg](cfg.color, width, height);
+    }
+    return SVGS.FileText('rgba(255, 255, 255, 0.4)', width, height);
+}
+
+function getFolderIcon(node, isOpen, width = 13, height = 13) {
+    const effectiveCat = node.overrideCategory || node.dominantCategory;
+    if (effectiveCat) {
+        const cfg = CATEGORY_STYLE_MAP[effectiveCat];
+        if (cfg && SVGS[cfg.svg]) {
+            return SVGS[cfg.svg](cfg.color, width, height);
+        }
+    }
+    
+    // Fallback: name-based detection
+    const n = node.name.toUpperCase();
+    if (node.path === '') {
+        return SVGS.FolderOpen('#8b5cf6', width, height);
+    } else if (n.includes('SFX') || n.includes('SOUND') || n.includes('FOLEY') || n.includes('RISER')
+        || n.includes('STINGER') || n.includes('WHOOSH') || n.includes('IMPACT')) {
+        return SVGS.Music('#fb923c', width, height);
+    } else if (n.includes('MUSIC') || n.includes('BEAT') || n.includes('TRACK') || n.includes('AUDIO')
+        || n.includes('AMBIENCE') || n.includes('AMBIENT')) {
+        return SVGS.Music('#34d399', width, height);
+    } else if (n.includes('A_ROLL') || n.includes('AROLL') || n.includes('INTERVIEW')) {
+        return SVGS.Video('#f87171', width, height);
+    } else if (n.includes('B_ROLL') || n.includes('BROLL') || n.includes('MEDIA') || n.includes('FOOTAGE')
+        || n.includes('VIDEO') || n.includes('STOCK') || n.includes('DRONE')) {
+        return SVGS.Video('#c084fc', width, height);
+    } else if (n.includes('GRAPHIC') || n.includes('THUMB') || n.includes('PNG') || n.includes('LOGO')
+        || n.includes('OVERLAY') || n.includes('MOTION') || n.includes('TEMPLATE') || n.includes('GFX')
+        || n.includes('FONT') || n.includes('LUT') || n.includes('MOGRT')) {
+        return SVGS.ImageIcon('#22d3ee', width, height);
+    } else if (n.includes('EXPORT') || n.includes('DELIVER') || n.includes('FINAL') || n.includes('RENDER')) {
+        return SVGS.HardDrive('#2dd4bf', width, height);
+    } else if (n.includes('PROJECT') || n.includes('PREMIERE') || n.includes('RESOLVE')) {
+        return SVGS.FileText('#fbbf24', width, height);
+    } else if (n.includes('ARCHIVE')) {
+        return SVGS.Archive('#94a3b8', width, height);
+    }
+    
+    return isOpen ? SVGS.FolderOpen('rgba(255, 255, 255, 0.4)', width, height) : SVGS.Folder('rgba(255, 255, 255, 0.4)', width, height);
+}
 
 // Folder type overrides keys (stored in localStorage)
 const FOLDER_TYPE_KEY = "vizwall_folder_types";
@@ -77,16 +135,61 @@ gridSlider.addEventListener('input', () => {
     scrollArea.style.setProperty('--grid-cols', gridSlider.value);
 });
 
-// Setup sidebar toggle listeners
+// Setup sidebar width and toggle logic
+let sidebarWidth = parseInt(localStorage.getItem('vizwall_sidebar_width') || '200', 10);
+if (sidebar.classList.contains('open')) {
+    sidebar.style.width = `${sidebarWidth}px`;
+} else {
+    sidebar.style.width = '0px';
+}
+
 toggleSidebarBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
+    const isOpen = sidebar.classList.toggle('open');
     toggleSidebarBtn.classList.toggle('active');
+    sidebar.style.width = isOpen ? `${sidebarWidth}px` : '0px';
 });
 
 closeSidebarBtn.addEventListener('click', () => {
     sidebar.classList.remove('open');
     toggleSidebarBtn.classList.remove('active');
+    sidebar.style.width = '0px';
 });
+
+// Setup sidebar resize drag listener
+const resizer = document.getElementById('sidebarResizer');
+if (resizer) {
+    let isResizing = false;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        sidebar.classList.add('resizing');
+        resizer.classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const rect = sidebar.getBoundingClientRect();
+        let newWidth = e.clientX - rect.left;
+        
+        if (newWidth < 120) newWidth = 120;
+        if (newWidth > 350) newWidth = 350;
+        
+        sidebarWidth = newWidth;
+        localStorage.setItem('vizwall_sidebar_width', sidebarWidth);
+        sidebar.style.width = `${sidebarWidth}px`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            sidebar.classList.remove('resizing');
+            resizer.classList.remove('resizing');
+            document.body.style.cursor = 'default';
+        }
+    });
+}
 
 clearFolderFilterBtn.addEventListener('click', () => {
     clearFolderFilter();
@@ -199,7 +302,7 @@ function scanFolderAssets(dirPath) {
                     category = "GRAPHICS";
                 }
                 mimeType = "image/jpeg";
-            } else if (["mogrt", "mogrts", "aet", "aepx", "ffx", "prfpset", "jsx", "jsxbin", "ttf", "otf", "woff", "woff2", "eot", "cube", "3dl", "lut"].includes(ext)) {
+            } else if (["mogrt", "mogrts", "aet", "aepx", "ffx", "prfpset", "jsx", "jsxbin", "cube", "3dl", "lut"].includes(ext)) {
                 category = "GRAPHICS";
                 mimeType = "application/octet-stream";
             } else {
@@ -390,12 +493,14 @@ function loadAssets(projectId) {
     }
 }
 
-// Returns assets with folder overrides dynamically applied
+// Returns assets with folder overrides dynamically applied, and filters out non-media files globally
 function getDisplayAssets() {
     const folderTypes = getFolderTypes();
     const normRoot = currentProjectPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const mediaCategories = ["A_ROLL", "B_ROLL", "AUDIO", "MUSIC", "SFX", "VOICEOVER", "GRAPHICS", "THUMBNAILS", "EXPORTS"];
+    const NON_MEDIA_EXTENSIONS = ["ttf", "otf", "woff", "woff2", "eot", "zip", "rar", "7z", "pdf", "txt", "doc", "docx", "xls", "xlsx", "csv"];
     
-    return assetsCache.map(asset => {
+    const mapped = assetsCache.map(asset => {
         const normAsset = asset.path.replace(/\\/g, '/');
         const normAssetLower = normAsset.toLowerCase();
         
@@ -426,6 +531,15 @@ function getDisplayAssets() {
             };
         }
         return asset;
+    });
+    
+    return mapped.filter(asset => {
+        if (!asset.category || !mediaCategories.includes(asset.category)) return false;
+        if (asset.path) {
+            const ext = asset.path.split('.').pop().toLowerCase();
+            if (NON_MEDIA_EXTENSIONS.includes(ext)) return false;
+        }
+        return true;
     });
 }
 
@@ -723,57 +837,11 @@ function createFolderTreeDom(node, depth = 0) {
         chevronHtml = `<span class="tree-chevron ${isOpen ? 'open' : ''}">▸</span>`;
     }
     
-    // Icon selection based on overrides and dominant category
-    let icon = '📁';
-    let iconColor = 'rgba(255, 255, 255, 0.4)';
-    
-    const effectiveCat = node.overrideCategory || node.dominantCategory;
-    if (effectiveCat && CATEGORY_ICON_MAP[effectiveCat]) {
-        const cfg = CATEGORY_ICON_MAP[effectiveCat];
-        icon = cfg.icon;
-        iconColor = cfg.color;
-    } else {
-        // Fallback: name-based detection
-        const n = node.name.toUpperCase();
-        if (node.path === '') {
-            icon = '🗂️';
-        } else if (n.includes('SFX') || n.includes('SOUND') || n.includes('FOLEY') || n.includes('RISER')
-            || n.includes('STINGER') || n.includes('WHOOSH') || n.includes('IMPACT')) {
-            icon = '🎵';
-            iconColor = '#fb923c';
-        } else if (n.includes('MUSIC') || n.includes('BEAT') || n.includes('TRACK') || n.includes('AUDIO')
-            || n.includes('AMBIENCE') || n.includes('AMBIENT')) {
-            icon = '🎵';
-            iconColor = '#34d399';
-        } else if (n.includes('A_ROLL') || n.includes('AROLL') || n.includes('INTERVIEW')) {
-            icon = '🎥';
-            iconColor = '#f87171';
-        } else if (n.includes('B_ROLL') || n.includes('BROLL') || n.includes('MEDIA') || n.includes('FOOTAGE')
-            || n.includes('VIDEO') || n.includes('STOCK') || n.includes('DRONE')) {
-            icon = '🎥';
-            iconColor = '#c084fc';
-        } else if (n.includes('GRAPHIC') || n.includes('THUMB') || n.includes('PNG') || n.includes('LOGO')
-            || n.includes('OVERLAY') || n.includes('MOTION') || n.includes('TEMPLATE') || n.includes('GFX')
-            || n.includes('FONT') || n.includes('LUT') || n.includes('MOGRT')) {
-            icon = '🎨';
-            iconColor = '#22d3ee';
-        } else if (n.includes('EXPORT') || n.includes('DELIVER') || n.includes('FINAL') || n.includes('RENDER')) {
-            icon = '💿';
-            iconColor = '#2dd4bf';
-        } else if (n.includes('PROJECT') || n.includes('PREMIERE') || n.includes('RESOLVE')) {
-            icon = '📝';
-            iconColor = '#fbbf24';
-        } else if (n.includes('ARCHIVE')) {
-            icon = '📦';
-            iconColor = '#94a3b8';
-        } else if (isOpen) {
-            icon = '📂';
-        }
-    }
+    const folderIconSvg = getFolderIcon(node, isOpen, 13, 13);
     
     item.innerHTML = `
         ${chevronHtml}
-        <span class="tree-icon" style="margin-right: 4px; color: ${iconColor};">${icon}</span>
+        <span class="tree-icon" style="margin-right: 4px;">${folderIconSvg}</span>
         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-grow:1;">
             ${node.name === '' ? 'All Files' : node.name.replace(/_/g, ' ')}
         </span>
@@ -825,10 +893,19 @@ function createFolderTreeDom(node, depth = 0) {
     return row;
 }
 
+function getAudioAccents(category) {
+    const cat = (category || '').toUpperCase();
+    if (cat === 'MUSIC') return { played: '#10b981', unplayed: 'rgba(16, 185, 129, 0.7)' };
+    if (cat === 'SFX') return { played: '#f97316', unplayed: 'rgba(249, 115, 22, 0.7)' };
+    if (cat === 'VOICEOVER') return { played: '#38bdf8', unplayed: 'rgba(56, 189, 248, 0.7)' };
+    return { played: '#3b82f6', unplayed: 'rgba(59, 130, 246, 0.7)' };
+}
+
 // Draw static placeholder waveform inside canvas
-function drawPlaceholderWaveform(ctx, W, H) {
+function drawPlaceholderWaveform(ctx, W, H, category) {
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'; // faint violet
+    const accents = getAudioAccents(category);
+    ctx.fillStyle = accents.unplayed;
     const barsCount = 35;
     const barW = W / barsCount;
     for (let i = 0; i < barsCount; i++) {
@@ -840,10 +917,11 @@ function drawPlaceholderWaveform(ctx, W, H) {
 }
 
 // Draw decoded array waveform inside canvas
-function drawDecodedWave(ctx, W, H, data, progress = 0) {
+function drawDecodedWave(ctx, W, H, data, progress = 0, category) {
     ctx.clearRect(0, 0, W, H);
     const barW = W / data.length;
     const progressX = progress * W;
+    const accents = getAudioAccents(category);
     
     for (let i = 0; i < data.length; i++) {
         const x = i * barW;
@@ -852,16 +930,16 @@ function drawDecodedWave(ctx, W, H, data, progress = 0) {
         const y = (H - h) / 2;
         
         if (x < progressX) {
-            ctx.fillStyle = '#34d399'; // Emerald for played
+            ctx.fillStyle = accents.played;
         } else {
-            ctx.fillStyle = 'rgba(139, 92, 246, 0.45)'; // Violet/lavender for unplayed
+            ctx.fillStyle = accents.unplayed;
         }
         ctx.fillRect(x + 0.5, y, Math.max(1, barW - 1), h);
     }
 }
 
 // Asynchronously loads and decodes audio files to draw custom waveforms (Accepts canvas element directly)
-function drawAudioWaveform(filePath, canvas, assetId) {
+function drawAudioWaveform(filePath, canvas, assetId, category) {
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
@@ -870,7 +948,7 @@ function drawAudioWaveform(filePath, canvas, assetId) {
     const W = canvas.width = 300;
     const H = canvas.height = 80;
     
-    drawPlaceholderWaveform(ctx, W, H);
+    drawPlaceholderWaveform(ctx, W, H, category);
     
     if (!fs.existsSync(filePath)) return;
     
@@ -889,7 +967,7 @@ function drawAudioWaveform(filePath, canvas, assetId) {
         
         audioCtx.decodeAudioData(arrayBuffer, (decodedData) => {
             const raw = decodedData.getChannelData(0);
-            const bars = 70;
+            const bars = 150;
             const step = Math.floor(raw.length / bars);
             const data = new Float32Array(bars);
             
@@ -906,10 +984,11 @@ function drawAudioWaveform(filePath, canvas, assetId) {
             
             audioWaveforms[assetId] = {
                 data: data,
-                duration: decodedData.duration
+                duration: decodedData.duration,
+                category: category
             };
             
-            drawDecodedWave(ctx, W, H, data, 0);
+            drawDecodedWave(ctx, W, H, data, 0, category);
             audioCtx.close();
         }, (e) => {
             console.error("Decode fail:", filePath, e);
@@ -953,7 +1032,7 @@ function setupAudioCardListeners(card, asset, canvas) {
             const info = audioWaveforms[asset.id];
             if (info && audio && audio.duration > 0) {
                 const progress = audio.currentTime / audio.duration;
-                drawDecodedWave(ctx, W, H, info.data, progress);
+                drawDecodedWave(ctx, W, H, info.data, progress, info.category);
             }
             animFrame = requestAnimationFrame(tick);
         }
@@ -973,9 +1052,9 @@ function setupAudioCardListeners(card, asset, canvas) {
             const ctx = canvas.getContext('2d');
             const info = audioWaveforms[asset.id];
             if (info) {
-                drawDecodedWave(ctx, canvas.width, canvas.height, info.data, 0);
+                drawDecodedWave(ctx, canvas.width, canvas.height, info.data, 0, info.category);
             } else {
-                drawPlaceholderWaveform(ctx, canvas.width, canvas.height);
+                drawPlaceholderWaveform(ctx, canvas.width, canvas.height, asset.category);
             }
         }
     });
@@ -1025,19 +1104,17 @@ function renderAssets(assets) {
                 <img src="${thumbUrl}" class="card-thumb-image" />
             `;
         } else {
-            let gradient = 'from-violet-900/20 to-blue-900/10';
-            let iconText = '🎥';
+            let gradient = 'from-blue-900/15 to-emerald-900/10';
             if (isImage) {
                 gradient = 'from-pink-900/15 to-cyan-900/10';
-                iconText = '🎨';
-            } else if (asset.category === "ARCHIVE") {
-                gradient = 'from-slate-900/30 to-slate-800/10';
-                iconText = '📦';
+            } else if (isVideo) {
+                gradient = 'from-violet-900/20 to-blue-900/10';
             }
+            const svgIcon = getCategoryIcon(asset.category, 26, 26);
             
             thumbHtml = `
-                <div class="absolute inset-0 bg-gradient-to-tr ${gradient} flex items-center justify-center" style="font-size: 24px;">
-                    ${iconText}
+                <div class="absolute inset-0 bg-gradient-to-tr ${gradient} flex items-center justify-center">
+                    ${svgIcon}
                 </div>
             `;
         }
@@ -1074,7 +1151,7 @@ function renderAssets(assets) {
         // Asynchronously render custom audio waveforms
         if (isAudio && asset.path) {
             const canvas = card.querySelector('.waveform-canvas');
-            drawAudioWaveform(asset.path, canvas, asset.id);
+            drawAudioWaveform(asset.path, canvas, asset.id, asset.category);
             setupAudioCardListeners(card, asset, canvas);
         }
 
@@ -1179,8 +1256,17 @@ function getAssetRelativeFolder(asset) {
     return parts.join('/');
 }
 
-function importWholeProject() {
-    const mediaCategories = ["A_ROLL", "B_ROLL", "AUDIO", "MUSIC", "SFX", "VOICEOVER", "GRAPHICS", "THUMBNAILS"];
+function evalScriptAsync(script) {
+    return new Promise((resolve, reject) => {
+        const cs = new CSInterface();
+        cs.evalScript(script, (response) => {
+            resolve(response);
+        });
+    });
+}
+
+async function importWholeProject() {
+    const mediaCategories = ["A_ROLL", "B_ROLL", "AUDIO", "MUSIC", "SFX", "VOICEOVER", "GRAPHICS", "THUMBNAILS", "EXPORTS"];
     const validAssets = getDisplayAssets().filter(asset => mediaCategories.includes(asset.category));
     
     if (validAssets.length === 0) {
@@ -1192,16 +1278,61 @@ function importWholeProject() {
     const msg = `Import all ${validAssets.length} media files and create their corresponding folder structure in Premiere Pro? (Non-media files will be ignored)`;
     if (!confirm(msg)) return;
     
-    // Serialize data
-    const serialized = validAssets.map(asset => {
-        return asset.path + '|||' + getAssetRelativeFolder(asset);
-    }).join('///');
+    // Get modal components
+    const importModal = document.getElementById('importModal');
+    const progressBarFill = document.getElementById('importProgressBarFill');
+    const progressStatus = document.getElementById('importProgressStatus');
+    const progressFile = document.getElementById('importProgressFile');
+    const modalFooter = document.getElementById('importModalFooter');
+    const closeBtn = document.getElementById('closeImportModalBtn');
     
-    const cs = new CSInterface();
-    cs.evalScript(`importAllAssets("${escapePath(serialized)}")`, (response) => {
-        console.log("ExtendScript batch import response:", response);
-        alert(response);
-    });
+    // Show modal and initialize progress
+    importModal.style.display = 'flex';
+    progressBarFill.style.width = '0%';
+    progressStatus.textContent = `Preparing import of ${validAssets.length} assets...`;
+    progressFile.textContent = '';
+    modalFooter.style.display = 'none';
+    
+    closeBtn.onclick = () => {
+        importModal.style.display = 'none';
+    };
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < validAssets.length; i++) {
+        const asset = validAssets[i];
+        const percent = Math.round((i / validAssets.length) * 100);
+        
+        // Update UI
+        progressBarFill.style.width = `${percent}%`;
+        progressStatus.textContent = `Importing asset ${i + 1} of ${validAssets.length}...`;
+        progressFile.textContent = asset.name;
+        
+        const relativeFolder = getAssetRelativeFolder(asset);
+        const escapedPath = escapePath(asset.path);
+        const escapedFolder = escapePath(relativeFolder);
+        
+        try {
+            // Call individual file import in ExtendScript
+            const result = await evalScriptAsync(`importFileToBin("${escapedPath}", "${escapedFolder}")`);
+            if (result && result.indexOf("Error") === -1) {
+                successCount++;
+            } else {
+                console.error(`Import failed for ${asset.path}:`, result);
+                failCount++;
+            }
+        } catch (err) {
+            console.error(`Error during ExtendScript execution for ${asset.path}:`, err);
+            failCount++;
+        }
+    }
+    
+    // Complete state
+    progressBarFill.style.width = '100%';
+    progressStatus.textContent = `Import completed! ${successCount} files imported successfully, ${failCount} failed.`;
+    progressFile.textContent = '';
+    modalFooter.style.display = 'flex';
 }
 
 // Initialize on load

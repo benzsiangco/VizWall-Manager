@@ -300,11 +300,108 @@
             overflow: hidden;
             transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 5;
+            position: relative; /* Needed for absolute positioning of resizer */
         }
 
         .sidebar-panel.open {
-            width: 175px; /* Docked width */
+            width: 200px; /* Docked width default */
             border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-panel.resizing {
+            transition: none !important;
+        }
+
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            background-color: transparent;
+            z-index: 10;
+            transition: background-color 0.15s ease;
+        }
+
+        .sidebar-resizer:hover, .sidebar-resizer.resizing {
+            background-color: rgba(139, 92, 246, 0.4);
+        }
+
+        /* Import Modal */
+        .import-modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .import-modal-content {
+            width: 85%;
+            max-width: 320px;
+            background-color: #0c0a14;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .import-modal-header h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            font-family: inherit;
+        }
+
+        .import-modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.15s ease;
+        }
+
+        .progress-status-text {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+        }
+
+        .progress-file-text {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.35);
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+
+        .import-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 4px;
         }
 
         .sidebar-header {
@@ -734,7 +831,7 @@
         <!-- Main split screen viewport -->
         <div class="main-content-layout">
             <!-- Left Sidebar Drawer (Docked & Open on load) -->
-            <div id="sidebar" class="sidebar-panel open">
+            <div id="sidebar" class="sidebar-panel open" style="width: 200px;">
                 <div class="sidebar-header">
                     <span>Folders</span>
                     <button id="closeSidebarBtn">&times;</button>
@@ -742,6 +839,8 @@
                 <div id="folderTree" class="folder-tree">
                     <!-- Tree rendered dynamically -->
                 </div>
+                <!-- Resizer handle -->
+                <div id="sidebarResizer" class="sidebar-resizer"></div>
             </div>
             
             <!-- Right Asset Grid Area -->
@@ -762,6 +861,25 @@
         <div class="footer-status">
             <span id="statusText">Disconnected</span>
             <span id="refreshBtn" class="footer-action" style="display: none;">Refresh</span>
+        </div>
+    </div>
+
+    <!-- Import Project Progress Modal -->
+    <div id="importModal" class="import-modal" style="display: none;">
+        <div class="import-modal-content">
+            <div class="import-modal-header">
+                <h4>Importing Project Assets</h4>
+            </div>
+            <div class="import-modal-body">
+                <div class="progress-bar-container">
+                    <div id="importProgressBarFill" class="progress-bar-fill"></div>
+                </div>
+                <div id="importProgressStatus" class="progress-status-text">Preparing import...</div>
+                <div id="importProgressFile" class="progress-file-text">Filename.mp4</div>
+            </div>
+            <div class="import-modal-footer" style="display: none;" id="importModalFooter">
+                <button id="closeImportModalBtn" class="control-btn" style="width: auto; padding: 0 16px; height: 28px; font-size: 11px;">Close</button>
+            </div>
         </div>
     </div>
 
