@@ -81,6 +81,7 @@ fn main() {
             commands::purge_expired_archives,
             // Project thumbnail
             commands::set_project_thumbnail,
+            commands::auto_set_project_thumbnail,
             commands::update_project_deadline,
             commands::delete_asset,
             commands::update_asset_category,

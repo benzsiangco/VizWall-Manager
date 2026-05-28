@@ -2141,6 +2141,143 @@ pub fn set_project_thumbnail(
     Ok(())
 }
 
+/// Automatically find the best video file to use as a project thumbnail.
+/// Priority:
+///   1. Most recently modified video in EXPORTS/ (any subfolder)
+///   2. Most recently modified video in REVISIONS/ (any subfolder)
+///   3. Most recently modified video in MEDIA/ (A_ROLL, B_ROLL, etc.)
+/// Then generate a thumbnail with ffmpeg and save it to the project record.
+#[tauri::command]
+pub fn auto_set_project_thumbnail(
+    state: State<'_, DbState>,
+    project_id: String,
+    cache_dir: String,
+) -> Result<String, String> {
+    // Get project path and current thumbnail
+    let (project_path, existing_thumb) = {
+        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        let row = conn.query_row(
+            "SELECT path, thumbnail_path FROM projects WHERE id = ?",
+            params![project_id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+        ).map_err(|e| e.to_string())?;
+        row
+    };
+
+    // If there's already a valid thumbnail on disk, return it
+    if let Some(ref t) = existing_thumb {
+        if !t.is_empty() && Path::new(t).exists() {
+            return Ok(t.clone());
+        }
+    }
+
+    let root = Path::new(&project_path);
+    if !root.exists() {
+        return Err("Project folder not found".to_string());
+    }
+
+    let video_exts = ["mp4", "mov", "mkv", "avi", "mxf", "m4v", "wmv"];
+
+    /// Walk a directory and return the most recently modified video file
+    fn latest_video(dir: &Path, exts: &[&str]) -> Option<PathBuf> {
+        let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+        if !dir.exists() { return None; }
+        fn walk(dir: &Path, exts: &[&str], best: &mut Option<(std::time::SystemTime, PathBuf)>) {
+            let Ok(entries) = fs::read_dir(dir) else { return; };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, exts, best);
+                } else {
+                    let ext = path.extension()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase();
+                    if exts.contains(&ext.as_str()) {
+                        if let Ok(meta) = fs::metadata(&path) {
+                            let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                            if best.as_ref().map_or(true, |(t, _)| mtime > *t) {
+                                *best = Some((mtime, path));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        walk(dir, exts, &mut best);
+        best.map(|(_, p)| p)
+    }
+
+    // Search in priority order
+    let candidate = latest_video(&root.join("EXPORTS"), &video_exts)
+        .or_else(|| latest_video(&root.join("REVISIONS"), &video_exts))
+        .or_else(|| latest_video(&root.join("MEDIA"), &video_exts));
+
+    let source = match candidate {
+        Some(p) => p,
+        None => return Err("No video files found in project folders".to_string()),
+    };
+
+    // Generate thumbnail with ffmpeg
+    let cache = Path::new(&cache_dir);
+    if !cache.exists() {
+        fs::create_dir_all(cache).map_err(|e| e.to_string())?;
+    }
+
+    let thumb_path = cache.join(format!("proj_{}.jpg", project_id));
+
+    // Regenerate if source is newer than cached thumb
+    let needs_regen = if thumb_path.exists() {
+        let thumb_mtime = fs::metadata(&thumb_path)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let src_mtime = fs::metadata(&source)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        src_mtime > thumb_mtime
+    } else {
+        true
+    };
+
+    if needs_regen {
+        let ffmpeg_cmd = resolve_ffmpeg();
+        let source_str = source.to_string_lossy().to_string();
+        let thumb_str = thumb_path.to_string_lossy().to_string();
+
+        let mut cmd = std::process::Command::new(&ffmpeg_cmd);
+        cmd.args([
+            "-ss", "00:00:02",   // 2s in — avoids black frames at start
+            "-i", &source_str,
+            "-vframes", "1",
+            "-vf", "scale=480:-1",
+            "-q:v", "3",
+            "-y",
+            &thumb_str,
+        ]);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
+
+        let out = cmd.output().map_err(|e| format!("ffmpeg error: {}", e))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(format!("ffmpeg failed: {}", &stderr[..stderr.len().min(300)]));
+        }
+    }
+
+    let thumb_str = thumb_path.to_string_lossy().to_string();
+
+    // Persist to DB
+    {
+        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE projects SET thumbnail_path = ? WHERE id = ?",
+            params![thumb_str, project_id],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    Ok(thumb_str)
+}
+
 // ── Archive ─────────────────────────────────────────────────────────────
 #[tauri::command]
 pub fn archive_project(

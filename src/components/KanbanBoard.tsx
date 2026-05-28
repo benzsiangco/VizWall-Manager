@@ -7,8 +7,9 @@ import {
 import { useProjectStore } from "../stores/useProjectStore";
 import { useAssetStore } from "../stores/useAssetStore";
 import { useUiStore } from "../stores/useUiStore";
-import { isTauri } from "../lib/tauri";
+import { isTauri, apiAutoSetProjectThumbnail } from "../lib/tauri";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { appDataDir } from "@tauri-apps/api/path";
 import { cn } from "../lib/utils";
 
 interface Column {
@@ -456,6 +457,47 @@ export const KanbanBoard: React.FC<{ searchQuery?: string }> = ({ searchQuery = 
   const scrollAnimRef = useRef<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [notesProject, setNotesProject] = useState<CardData | null>(null);
+
+  // Auto-generate thumbnails for projects that don't have one yet
+  // Runs in the background — one project at a time to avoid hammering ffmpeg
+  useEffect(() => {
+    if (!isTauri()) return;
+    const projectsMissingThumb = clients
+      .flatMap(c => c.projects)
+      .filter(p => !p.thumbnail_path && p.path);
+    if (projectsMissingThumb.length === 0) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const cacheDir = await appDataDir() + "thumbnails";
+        for (const proj of projectsMissingThumb) {
+          if (cancelled) break;
+          try {
+            const thumb = await apiAutoSetProjectThumbnail(proj.id, cacheDir);
+            if (thumb && !cancelled) {
+              // Optimistically update the store so the card shows the thumb immediately
+              useProjectStore.setState(state => ({
+                clients: state.clients.map(c => ({
+                  ...c,
+                  projects: c.projects.map(p =>
+                    p.id === proj.id ? { ...p, thumbnail_path: thumb } : p
+                  ),
+                })),
+              }));
+            }
+          } catch {
+            // No video files found or ffmpeg unavailable — skip silently
+          }
+        }
+      } catch {
+        // appDataDir unavailable — skip
+      }
+    };
+    // Small delay so the board renders first
+    const t = setTimeout(run, 800);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [clients]);
 
   useEffect(() => { dragRef.current = drag; }, [drag]);
 

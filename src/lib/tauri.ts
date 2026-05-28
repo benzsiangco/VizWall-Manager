@@ -767,6 +767,11 @@ export async function apiSetProjectThumbnail(projectId: string, thumbnailPath: s
   if (isTauri()) return invoke("set_project_thumbnail", { projectId, thumbnailPath });
 }
 
+export async function apiAutoSetProjectThumbnail(projectId: string, cacheDir: string): Promise<string> {
+  if (isTauri()) return invoke<string>("auto_set_project_thumbnail", { projectId, cacheDir });
+  return "";
+}
+
 export async function apiDeleteAsset(assetId: string, deleteFile: boolean): Promise<void> {
   if (isTauri()) return invoke("delete_asset", { assetId, deleteFile });
   // browser mock
