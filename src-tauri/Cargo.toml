@@ -1,6 +1,6 @@
 [package]
 name = "vizwall-workspace"
-version = "0.1.0"
+version = "1.0.0"
 description = "AI-powered creative file manager and workspace for creative professionals"
 authors = ["Antigravity"]
 edition = "2021"

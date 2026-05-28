@@ -3078,3 +3078,74 @@ pub fn get_activity_heatmap(
         assets_processed,
     })
 }
+
+// ── Native Auto-Updater ──────────────────────────────────────────────────
+/// Returns the version of the application package.
+#[tauri::command]
+pub fn get_app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// Dispatches a native PowerShell script to retrieve the latest GitHub release payload.
+/// Avoids heavy reqwest crate dependency.
+#[tauri::command]
+pub fn check_for_updates() -> Result<serde_json::Value, String> {
+    let output = std::process::Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-Command",
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-RestMethod -Uri 'https://api.github.com/repos/benzsiangco/VizWall-Manager/releases/latest' | ConvertTo-Json -Depth 5"
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run PowerShell update check: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(format!("PowerShell failed to check updates: {}", err));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse release JSON: {}", e))?;
+
+    Ok(json)
+}
+
+/// Downloads the specified installer via native PowerShell, starts it, and terminates the active app.
+#[tauri::command]
+pub fn download_and_install_update(url: String) -> Result<String, String> {
+    let temp_dir = std::env::temp_dir();
+    let file_name = url.split('/').last().unwrap_or("vizwall-setup.exe");
+    let is_msi = file_name.to_lowercase().ends_with(".msi");
+    let extension = if is_msi { "msi" } else { "exe" };
+    
+    let dest_file = temp_dir.join(format!("vizwall-update-installer.{}", extension));
+    let dest_path = dest_file.to_string_lossy().to_string();
+
+    // Use PowerShell Invoke-WebRequest to download the installer
+    let status = std::process::Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+                url, dest_path
+            )
+        ])
+        .status()
+        .map_err(|e| format!("Failed to start download process: {}", e))?;
+
+    if !status.success() {
+        return Err("PowerShell downloader returned a non-zero exit code".to_string());
+    }
+
+    // Spawn the installer cleanly through cmd so it runs with elevation/GUI prompts
+    std::process::Command::new("cmd")
+        .args(&["/C", "start", "", &dest_path])
+        .spawn()
+        .map_err(|e| format!("Failed to spawn installer process: {}", e))?;
+
+    // Gracefully exit so the installer can replace files without locks
+    std::process::exit(0);
+}
+

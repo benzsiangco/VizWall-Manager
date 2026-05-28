@@ -25,10 +25,13 @@ fn main() {
             let conn = init_db(db_path).expect("Failed to initialize SQLite database");
             app.manage(DbState(Mutex::new(conn)));
 
-            // Automatically install/update the Premiere Pro plugin CEP extension and registry
-            if let Err(e) = plugin_installer::install_premiere_plugin(app) {
-                eprintln!("Error installing Premiere Pro plugin: {}", e);
-            }
+            // Automatically install/update the Premiere Pro plugin CEP extension and registry asynchronously in background
+            let app_handle_clone = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = plugin_installer::install_premiere_plugin(&app_handle_clone) {
+                    eprintln!("Error installing Premiere Pro plugin: {}", e);
+                }
+            });
 
             Ok(())
         })
@@ -93,7 +96,11 @@ fn main() {
             commands::scan_folder_assets_cached,
             commands::clear_library_cache,
             commands::update_project_notes,
-            commands::get_activity_heatmap
+            commands::get_activity_heatmap,
+            // Native Auto-Updater
+            commands::get_app_version,
+            commands::check_for_updates,
+            commands::download_and_install_update
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");

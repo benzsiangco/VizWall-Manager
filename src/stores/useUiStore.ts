@@ -18,6 +18,8 @@ interface UiState {
   newProjectModalOpen: boolean;
   importModalOpen: boolean;
   aboutModalOpen: boolean;
+  updateModalOpen: boolean;
+  updateInfo: any;
 
   // Library mode — when set, Workspace shows a standalone folder instead of a project
   activeLibraryPath: string | null;
@@ -31,6 +33,8 @@ interface UiState {
   setNewProjectModalOpen: (open: boolean) => void;
   setImportModalOpen: (open: boolean) => void;
   setAboutModalOpen: (open: boolean) => void;
+  setUpdateModalOpen: (open: boolean) => void;
+  setUpdateInfo: (info: any) => void;
   openLibrary: (path: string, label: string) => void;
   closeLibrary: () => void;
   fetchRecentActivity: () => Promise<void>;
@@ -46,6 +50,8 @@ export const useUiStore = create<UiState>((set) => ({
   newProjectModalOpen: false,
   importModalOpen: false,
   aboutModalOpen: false,
+  updateModalOpen: false,
+  updateInfo: null,
   activeLibraryPath: null,
   activeLibraryLabel: null,
 
@@ -57,6 +63,8 @@ export const useUiStore = create<UiState>((set) => ({
   setNewProjectModalOpen: (open) => set({ newProjectModalOpen: open }),
   setImportModalOpen: (open) => set({ importModalOpen: open }),
   setAboutModalOpen: (open) => set({ aboutModalOpen: open }),
+  setUpdateModalOpen: (open) => set({ updateModalOpen: open }),
+  setUpdateInfo: (info) => set({ updateInfo: info }),
 
   openLibrary: (path, label) => set({
     activeLibraryPath: path,

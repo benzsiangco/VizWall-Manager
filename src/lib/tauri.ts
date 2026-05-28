@@ -851,3 +851,23 @@ export async function apiGetActivityHeatmap(days = 365): Promise<ActivityHeatmap
   // browser mock — return empty
   return { days: [], active_days: 0, total_events: 0, projects_touched: 0, assets_processed: 0 };
 }
+
+export async function apiGetAppVersion(): Promise<string> {
+  if (isTauri()) return invoke<string>("get_app_version");
+  return "1.0.0"; // browser mock
+}
+
+export async function apiCheckForUpdates(): Promise<any> {
+  if (isTauri()) return invoke<any>("check_for_updates");
+  
+  // browser mock - return no updates after 1 second delay
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return null;
+}
+
+export async function apiDownloadAndInstallUpdate(url: string): Promise<string> {
+  if (isTauri()) return invoke<string>("download_and_install_update", { url });
+  alert("Browser Mock: Downloading installer from " + url);
+  return "Success";
+}
+

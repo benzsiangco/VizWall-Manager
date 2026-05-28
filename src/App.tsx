@@ -14,8 +14,8 @@ import { ProgressToasts } from "./components/ProgressToasts";
 import { useProjectStore } from "./stores/useProjectStore";
 import { useUiStore } from "./stores/useUiStore";
 import { useAssetStore } from "./stores/useAssetStore";
-import { apiGetNamingTemplate, apiGetWorkspacePath, apiPickFolder, apiPurgeExpiredArchives, apiSaveWorkspacePath } from "./lib/tauri";
-import { X, Users, FolderOpen, Mail, Globe, Instagram, Facebook, Music2, ExternalLink } from "lucide-react";
+import { apiGetNamingTemplate, apiGetWorkspacePath, apiPickFolder, apiPurgeExpiredArchives, apiSaveWorkspacePath, apiDownloadAndInstallUpdate, apiGetAppVersion } from "./lib/tauri";
+import { X, Users, FolderOpen, Mail, Globe, Instagram, Facebook, Music2, ExternalLink, Sparkles, Download } from "lucide-react";
 
 export default function App() {
   const { fetchClientsAndProjects, clients, createClient, createProject } = useProjectStore();
@@ -28,6 +28,9 @@ export default function App() {
     setNewProjectModalOpen,
     aboutModalOpen,
     setAboutModalOpen,
+    updateModalOpen,
+    setUpdateModalOpen,
+    updateInfo,
   } = useUiStore();
 
   const [clientName, setClientName] = useState("");
@@ -40,6 +43,50 @@ export default function App() {
   const [pipelineSearch, setPipelineSearch] = useState("");
   const [projectError, setProjectError] = useState<string | null>(null);
   const [projectSubmitting, setProjectSubmitting] = useState(false);
+
+  // Auto-Updater States
+  const [currentVersion, setCurrentVersion] = useState("1.0.0");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadStatusText, setDownloadStatusText] = useState("");
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGetAppVersion().then(v => {
+      if (v) setCurrentVersion(v);
+    }).catch(() => {});
+  }, []);
+
+  const handleStartUpdate = async () => {
+    if (isDownloading || !updateInfo?.url) return;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setDownloadStatusText("Initializing download...");
+    setDownloadError(null);
+
+    // Simulate progress while PowerShell fetches the file in background
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      if (currentProgress < 90) {
+        currentProgress += Math.random() * 8 + 2;
+        if (currentProgress > 90) currentProgress = 90;
+        setDownloadProgress(Math.round(currentProgress));
+        setDownloadStatusText(`Downloading update... ${Math.round(currentProgress)}%`);
+      }
+    }, 300);
+
+    try {
+      await apiDownloadAndInstallUpdate(updateInfo.url);
+      clearInterval(interval);
+      setDownloadProgress(100);
+      setDownloadStatusText("Download complete! Starting installer...");
+    } catch (err) {
+      clearInterval(interval);
+      setIsDownloading(false);
+      setDownloadError(String(err));
+      setDownloadStatusText("");
+    }
+  };
 
   useEffect(() => {
     fetchClientsAndProjects();
@@ -207,6 +254,116 @@ export default function App() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Available Modal */}
+      {updateModalOpen && updateInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#0c0a14]/90 rounded-2xl overflow-hidden shadow-[0_0_50px_-12px_rgba(139,92,246,0.35)] border border-violet-500/20 backdrop-blur-md">
+            
+            {/* Header */}
+            <div className="p-4 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.01]">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-violet-400 animate-pulse" />
+                <span className="text-sm font-bold text-white font-outfit">Update Available</span>
+              </div>
+              {!isDownloading && (
+                <button onClick={() => setUpdateModalOpen(false)} className="p-1 rounded hover:bg-white/[0.06] text-white/40 hover:text-white transition-colors">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="p-5 space-y-4">
+              
+              {/* Version Comparison */}
+              <div className="flex items-center justify-center gap-4 bg-white/[0.02] border border-white/[0.04] rounded-xl py-3 px-4">
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-white/30 font-bold mb-0.5">Current</p>
+                  <span className="text-xs font-mono bg-white/5 border border-white/10 text-white/60 rounded px-2 py-0.5">
+                    v{currentVersion}
+                  </span>
+                </div>
+                <div className="text-violet-400/50 flex items-center justify-center animate-bounce-horizontal">
+                  →
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-violet-400 font-bold mb-0.5">Latest</p>
+                  <span className="text-xs font-mono bg-violet-500/10 border border-violet-500/30 text-violet-400 rounded px-2 py-0.5 shadow-[0_0_12px_rgba(139,92,246,0.2)] font-semibold">
+                    {updateInfo.version}
+                  </span>
+                </div>
+              </div>
+
+              {/* What's New */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/30 uppercase tracking-widest font-outfit">Release Notes</label>
+                <div className="w-full max-h-44 bg-white/[0.02] border border-white/[0.04] rounded-xl p-3 overflow-y-auto text-xs text-white/70 leading-relaxed font-sans scrollbar-thin">
+                  {updateInfo.notes ? (
+                    <div className="space-y-2 whitespace-pre-wrap font-sans text-[11px] leading-relaxed">
+                      {updateInfo.notes}
+                    </div>
+                  ) : (
+                    <p className="italic text-white/30">No release notes provided for this version.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Download / Installing States */}
+              {isDownloading && (
+                <div className="space-y-2 py-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-violet-400/80 font-medium animate-pulse">{downloadStatusText}</span>
+                    <span className="font-mono text-white/40">{downloadProgress}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(139,92,246,0.4)]"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {downloadError && (
+                <div className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 leading-relaxed">
+                  <p className="font-semibold mb-0.5">Failed to install update:</p>
+                  <p className="text-white/60 font-mono break-all">{downloadError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer / Controls */}
+            <div className="px-5 py-4 flex justify-end gap-2 bg-white/[0.01] border-t border-white/[0.04]">
+              {!isDownloading ? (
+                <>
+                  <button 
+                    onClick={() => setUpdateModalOpen(false)} 
+                    className="px-4 py-2 text-xs text-white/55 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                  >
+                    Remind Later
+                  </button>
+                  <button 
+                    onClick={handleStartUpdate}
+                    className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-violet-500/10 transition-colors flex items-center gap-1.5"
+                  >
+                    <Download size={13} />
+                    Update Now
+                  </button>
+                </>
+              ) : (
+                <button 
+                  disabled
+                  className="px-4 py-2 bg-violet-600/30 text-violet-400 text-xs font-semibold rounded-lg flex items-center gap-2 cursor-not-allowed"
+                >
+                  <span className="w-3 h-3 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                  Downloading...
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}

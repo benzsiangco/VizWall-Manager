@@ -17,8 +17,7 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
     Ok(())
 }
 
-pub fn install_premiere_plugin(app: &App) -> Result<(), Box<dyn std::error::Error>> {
-    let app_handle = app.handle();
+pub fn install_premiere_plugin(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     
     // 1. Resolve source path in Tauri bundle resources
     // The resource directory in production matches the structure in tauri.conf.json resources
