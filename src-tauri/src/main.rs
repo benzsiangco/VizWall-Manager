@@ -4,6 +4,7 @@
 mod database;
 mod models;
 mod commands;
+mod plugin_installer;
 
 use database::{init_db, DbState};
 use std::sync::Mutex;
@@ -23,6 +24,11 @@ fn main() {
 
             let conn = init_db(db_path).expect("Failed to initialize SQLite database");
             app.manage(DbState(Mutex::new(conn)));
+
+            // Automatically install/update the Premiere Pro plugin CEP extension and registry
+            if let Err(e) = plugin_installer::install_premiere_plugin(app) {
+                eprintln!("Error installing Premiere Pro plugin: {}", e);
+            }
 
             Ok(())
         })

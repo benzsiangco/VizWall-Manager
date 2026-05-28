@@ -42,6 +42,9 @@
     "externalBin": [
       "binaries/ffmpeg"
     ],
+    "resources": [
+      "../premiere-plugin/com.vizwall.premiere/**/*"
+    ],
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
