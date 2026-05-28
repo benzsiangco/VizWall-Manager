@@ -519,6 +519,77 @@
             height: 100%;
         }
 
+        /* List view mode */
+        .scroll-area.list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 4px;
+        }
+
+        .scroll-area.list-view .asset-card {
+            flex-direction: row;
+            align-items: center;
+            border-radius: 6px;
+            height: 44px;
+            overflow: hidden;
+        }
+
+        .scroll-area.list-view .card-thumb-area {
+            width: 70px;
+            height: 44px;
+            aspect-ratio: unset;
+            flex-shrink: 0;
+            border-radius: 0;
+        }
+
+        /* Audio waveform in list view — compact horizontal strip */
+        .scroll-area.list-view .waveform-canvas {
+            width: 70px;
+            height: 44px;
+        }
+
+        .scroll-area.list-view .card-details {
+            flex: 1;
+            min-width: 0;
+            padding: 0 8px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scroll-area.list-view .card-title {
+            flex: 1;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .scroll-area.list-view .card-meta {
+            flex-shrink: 0;
+            font-size: 9px;
+        }
+
+        .scroll-area.list-view .category-badge {
+            position: static;
+            flex-shrink: 0;
+            font-size: 7px;
+        }
+
+        .scroll-area.list-view .duration-badge {
+            position: static;
+            flex-shrink: 0;
+            font-size: 8px;
+            background: transparent;
+            padding: 0;
+        }
+
+        .scroll-area.list-view .card-play-overlay {
+            display: none;
+        }
+
         /* Scrollbar styles */
         .scroll-area::-webkit-scrollbar, .folder-tree::-webkit-scrollbar {
             width: 6px;
@@ -760,40 +831,30 @@
 <body>
     <div class="ambient-glow"></div>
     <div class="app-container">
-        <!-- Header -->
+        <!-- Compact Header Row: logo + dropdown + status -->
         <div class="header">
-            <div class="logo-section">
-                <img src="vizwall-logo.png" alt="VizWall Workspace" style="height: 18px; width: auto; object-fit: contain; display: block;" />
+            <div class="logo-section" style="flex-shrink:0;">
+                <img src="vizwall-logo.png" alt="VizWall Workspace" style="height: 16px; width: auto; object-fit: contain; display: block;" />
             </div>
-            <div id="statusDot" class="status-dot" title="Workspace Database Not Connected"></div>
+            <div class="select-wrapper" style="flex:1; min-width:0; margin: 0 6px;">
+                <select id="projectSelect" disabled style="padding: 5px 10px; font-size: 11px;">
+                    <option value="">Select Project...</option>
+                </select>
+            </div>
+            <div id="statusDot" class="status-dot" title="Workspace Database Not Connected" style="flex-shrink:0;"></div>
         </div>
 
-        <!-- Filters -->
+        <!-- Controls Row -->
         <div class="filters">
-            <!-- Project Dropdown and Import Project Button -->
-            <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-                <div class="select-wrapper" style="flex-grow: 1; min-width: 0;">
-                    <select id="projectSelect" disabled>
-                        <option value="">Select Project...</option>
-                    </select>
-                </div>
-                <button id="importProjectBtn" class="control-btn" style="width: auto; padding: 0 10px; font-size: 11px; font-weight: 600; gap: 4px; display: none; height: 32px; align-items: center; justify-content: center; flex-shrink: 0;" title="Import whole project structure (ignoring non-media files)">
-                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
-                        <polyline points="9 17 4 12 9 7"></polyline>
-                        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
-                    </svg>
-                    <span>Import Project</span>
-                </button>
-            </div>
-            
-            <!-- Controls Row -->
             <div class="controls-row">
-                <button id="toggleSidebarBtn" class="control-btn open active" title="Open Library Folders">
+                <!-- Folder sidebar toggle -->
+                <button id="toggleSidebarBtn" class="control-btn open active" title="Toggle Folders">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                     </svg>
                 </button>
-                
+
+                <!-- Search -->
                 <div class="search-container">
                     <svg class="search-icon" viewBox="0 0 24 24">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -801,20 +862,30 @@
                     </svg>
                     <input type="text" id="searchInput" class="search-input" placeholder="Search assets..." disabled>
                 </div>
-                
-                <!-- Sort Dropdown -->
+
+                <!-- Sort -->
                 <div class="select-wrapper sort-wrapper">
                     <select id="sortSelect">
-                        <option value="created_at-desc">Date Added (Newest)</option>
-                        <option value="created_at-asc">Date Added (Oldest)</option>
+                        <option value="created_at-desc">Date Added</option>
                         <option value="name-asc">Name A-Z</option>
-                        <option value="name-desc">Name Z-A</option>
-                        <option value="size-desc">File Size (Max)</option>
-                        <option value="size-asc">File Size (Min)</option>
+                        <option value="size-desc">Size</option>
                     </select>
                 </div>
 
-                <div class="grid-slider-container">
+                <!-- List/Grid toggle -->
+                <button id="viewToggleBtn" class="control-btn" title="Toggle list/grid view">
+                    <svg id="viewToggleIcon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="21" y2="6"></line>
+                        <line x1="8" y1="12" x2="21" y2="12"></line>
+                        <line x1="8" y1="18" x2="21" y2="18"></line>
+                        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                </button>
+
+                <!-- Grid size slider (hidden in list mode) -->
+                <div class="grid-slider-container" id="gridSliderContainer">
                     <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" class="slider-icon" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="7" height="7"></rect>
                         <rect x="14" y="3" width="7" height="7"></rect>
@@ -823,8 +894,17 @@
                     </svg>
                     <input type="range" id="gridSlider" min="1" max="4" value="2" class="grid-slider" title="Resize Grid">
                 </div>
+
+                <!-- Import Project button (shown only for projects, not library) -->
+                <button id="importProjectBtn" class="control-btn" style="width: auto; padding: 0 8px; font-size: 10px; font-weight: 600; gap: 3px; display: none; height: 32px; align-items: center; justify-content: center; flex-shrink: 0;" title="Import whole project to Premiere bins">
+                    <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                        <polyline points="9 17 4 12 9 7"></polyline>
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+                    </svg>
+                    <span>Import</span>
+                </button>
             </div>
-            
+
             <!-- Active filter folder indicator -->
             <div id="activeFolderRow" class="active-folder-row" style="display: none;">
                 <span id="activeFolderName">All Files</span>

@@ -130,6 +130,39 @@ function setFolderType(folderPath, category) {
     localStorage.setItem(FOLDER_TYPE_KEY, JSON.stringify(types));
 }
 
+// View mode: 'grid' or 'list'
+let viewMode = localStorage.getItem('vizwall_view_mode') || 'grid';
+const gridSliderContainer = document.getElementById('gridSliderContainer');
+const viewToggleBtn = document.getElementById('viewToggleBtn');
+
+function applyViewMode() {
+    if (viewMode === 'list') {
+        scrollArea.classList.add('list-view');
+        gridSliderContainer.style.display = 'none';
+        viewToggleBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+        </svg>`;
+    } else {
+        scrollArea.classList.remove('list-view');
+        gridSliderContainer.style.display = 'flex';
+        viewToggleBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>`;
+    }
+}
+
+applyViewMode();
+
+viewToggleBtn.addEventListener('click', () => {
+    viewMode = viewMode === 'grid' ? 'list' : 'grid';
+    localStorage.setItem('vizwall_view_mode', viewMode);
+    applyViewMode();
+    filterAndRenderAssets();
+});
+
 // Setup grid slider listener
 gridSlider.addEventListener('input', () => {
     scrollArea.style.setProperty('--grid-cols', gridSlider.value);
@@ -466,10 +499,13 @@ function loadAssets(projectId) {
     currentProjectId = projectId;
     const proj = projectsMap[projectId];
     currentProjectPath = proj ? proj.path : '';
-    importProjectBtn.style.display = 'flex';
+    // Hide Import Project button for Global Library — it's a read-only asset browser
+    importProjectBtn.style.display = projectId === "GLOBAL_LIBRARY" ? 'none' : 'flex';
     
     if (projectId === "GLOBAL_LIBRARY") {
         console.log("Loading global library assets from:", libraryPath);
+        // Normalize the library path so folder tree relative paths work correctly
+        currentProjectPath = libraryPath;
         assetsCache = scanFolderAssets(libraryPath);
         filterAndRenderAssets();
         renderFolderTreeUI(getDisplayAssets());
@@ -1063,7 +1099,7 @@ function setupAudioCardListeners(card, asset, canvas) {
     });
 }
 
-// Render asset grid
+// Render asset grid or list
 function renderAssets(assets) {
     scrollArea.innerHTML = '';
     
@@ -1075,6 +1111,8 @@ function renderAssets(assets) {
         }
         return;
     }
+    
+    const isList = viewMode === 'list';
     
     assets.forEach(asset => {
         const card = document.createElement('div');
@@ -1099,6 +1137,7 @@ function renderAssets(assets) {
         let thumbHtml = '';
         const canvasId = `wave_${asset.id}`;
         
+        // Audio always gets waveform canvas (both grid and list)
         if (isAudio) {
             thumbHtml = `<canvas class="waveform-canvas" id="${canvasId}"></canvas>`;
         } else if (hasThumb) {
@@ -1107,16 +1146,9 @@ function renderAssets(assets) {
                 <img src="${thumbUrl}" class="card-thumb-image" />
             `;
         } else {
-            let gradient = 'from-blue-900/15 to-emerald-900/10';
-            if (isImage) {
-                gradient = 'from-pink-900/15 to-cyan-900/10';
-            } else if (isVideo) {
-                gradient = 'from-violet-900/20 to-blue-900/10';
-            }
-            const svgIcon = getCategoryIcon(asset.category, 26, 26);
-            
+            const svgIcon = getCategoryIcon(asset.category, isList ? 18 : 26, isList ? 18 : 26);
             thumbHtml = `
-                <div class="absolute inset-0 bg-gradient-to-tr ${gradient} flex items-center justify-center">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0.5;">
                     ${svgIcon}
                 </div>
             `;
@@ -1125,31 +1157,49 @@ function renderAssets(assets) {
         // Duration badge
         const durationHtml = asset.duration ? `<span class="duration-badge">${formatDuration(asset.duration)}</span>` : '';
         
-        // Category badge classes
+        // Category badge
         const catClass = `category-badge badge-${asset.category.toLowerCase()}`;
         const catLabel = asset.category.replace('_', ' ');
 
-        card.innerHTML = `
-            <div class="card-thumb-area">
-                ${thumbHtml}
-                ${durationHtml}
-                <span class="${catClass}">${catLabel}</span>
-                <div class="card-play-overlay">
-                    <div class="play-btn-circle">
-                        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="0" fill="currentColor">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
+        if (isList) {
+            // List layout: thumb | name | category | size | duration
+            card.innerHTML = `
+                <div class="card-thumb-area">
+                    ${thumbHtml}
+                    ${isVideo ? `<video class="card-video" muted playsinline></video>` : ''}
+                </div>
+                <div class="card-details">
+                    <div class="card-title" title="${asset.name}">${asset.name}</div>
+                    <span class="${catClass}" style="position:static;font-size:7px;">${catLabel}</span>
+                    <div class="card-meta" style="margin-left:auto;">
+                        <span>${formatBytes(asset.size)}</span>
+                        ${asset.duration ? `<span style="margin-left:6px;color:rgba(255,255,255,0.5);">${formatDuration(asset.duration)}</span>` : ''}
                     </div>
                 </div>
-                ${isVideo ? `<video class="card-video" muted playsinline></video>` : ''}
-            </div>
-            <div class="card-details">
-                <div class="card-title" title="${asset.name}">${asset.name}</div>
-                <div class="card-meta">
-                    <span>${formatBytes(asset.size)}</span>
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="card-thumb-area">
+                    ${thumbHtml}
+                    ${durationHtml}
+                    <span class="${catClass}">${catLabel}</span>
+                    <div class="card-play-overlay">
+                        <div class="play-btn-circle">
+                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="0" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                        </div>
+                    </div>
+                    ${isVideo ? `<video class="card-video" muted playsinline></video>` : ''}
                 </div>
-            </div>
-        `;
+                <div class="card-details">
+                    <div class="card-title" title="${asset.name}">${asset.name}</div>
+                    <div class="card-meta">
+                        <span>${formatBytes(asset.size)}</span>
+                    </div>
+                </div>
+            `;
+        }
         
         // Asynchronously render custom audio waveforms
         if (isAudio && asset.path) {
