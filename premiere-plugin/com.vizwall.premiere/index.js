@@ -1382,10 +1382,6 @@ async function importWholeProject() {
         return;
     }
     
-    // Confirm import with user
-    const msg = `Import all ${validAssets.length} media files and organize them into standard project bins (Sequences, Footage, Audio, etc.) in Premiere Pro? (Non-media files will be ignored)`;
-    if (!confirm(msg)) return;
-    
     // Get modal components
     const importModal = document.getElementById('importModal');
     const progressBarFill = document.getElementById('importProgressBarFill');
