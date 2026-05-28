@@ -825,6 +825,42 @@ export const Dashboard: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* Connections */}
+        <div className="space-y-2 pt-4 border-t border-white/[0.04]">
+          <h3 className="text-[11px] font-bold text-white/35 uppercase tracking-widest font-outfit mb-2 px-1">Connections</h3>
+          <div className="space-y-2">
+            {/* Premiere Pro */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img src="/premiere-pro.png" alt="Premiere Pro" className="w-5 h-5 object-contain rounded" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-white/80 leading-tight">Adobe Premiere Pro</p>
+                  <p className="text-[8px] text-white/35 mt-0.5 leading-none">CEP Extension active</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+                <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-wider font-mono">Active</span>
+              </div>
+            </div>
+
+            {/* DaVinci Resolve */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img src="/DaVinci-Resolve-Logo.tif" alt="DaVinci Resolve" className="w-5 h-5 object-contain rounded" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-white/80 leading-tight">DaVinci Resolve</p>
+                  <p className="text-[8px] text-white/35 mt-0.5 leading-none">Workflow Integration</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shadow-[0_0_6px_#8b5cf6]" />
+                <span className="text-[8px] font-bold text-violet-400 uppercase tracking-wider font-mono">Ready</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
