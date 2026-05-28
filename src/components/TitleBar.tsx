@@ -12,6 +12,29 @@ import { cn } from "../lib/utils";
 // ── Current app version (bump this on each release) ──────────────────────
 const APP_VERSION = "1.0.0";
 
+// ── Version chip — always visible in titlebar ─────────────────────────────
+const VersionChip: React.FC<{ onClick: () => void; hasUpdate: boolean }> = ({ onClick, hasUpdate }) => (
+  <button
+    onMouseDown={e => e.stopPropagation()}
+    onClick={onClick}
+    className={cn(
+      "relative flex items-center gap-1.5 px-2.5 h-9 text-[10px] font-mono transition-colors",
+      hasUpdate
+        ? "text-emerald-400/80 hover:text-emerald-300"
+        : "text-white/20 hover:text-white/50"
+    )}
+    title={hasUpdate ? "Update available — click to install" : `VizWall v${APP_VERSION}`}
+  >
+    <span>v{APP_VERSION}</span>
+    {hasUpdate && (
+      <>
+        <ArrowDownToLine size={11} />
+        <span className="absolute top-1.5 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-[#0a0910] animate-pulse" />
+      </>
+    )}
+  </button>
+);
+
 // ── Update popover ────────────────────────────────────────────────────────
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "done" | "error" | "up-to-date";
 
@@ -193,26 +216,14 @@ const UpdateButton: React.FC = () => {
     return () => clearTimeout(t);
   }, []);
 
-  if (updateState === "idle" || updateState === "checking" || updateState === "up-to-date") {
-    return null; // invisible until update is found
-  }
+  const hasUpdate = updateState === "available";
 
   return (
     <div ref={containerRef} className="relative flex items-center" onMouseDown={e => e.stopPropagation()}>
-      <button
-        onClick={() => setPopoverOpen(o => !o)}
-        className={cn(
-          "relative w-9 h-9 flex items-center justify-center transition-colors",
-          popoverOpen
-            ? "text-emerald-400 bg-emerald-500/10"
-            : "text-white/30 hover:text-emerald-400 hover:bg-emerald-500/10"
-        )}
-        title="Update available"
-      >
-        <ArrowDownToLine size={13} />
-        {/* Green dot badge */}
-        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0a0910] animate-pulse" />
-      </button>
+      <VersionChip
+        onClick={() => { if (hasUpdate) setPopoverOpen(o => !o); }}
+        hasUpdate={hasUpdate}
+      />
 
       {popoverOpen && updateInfo && (
         <UpdatePopover

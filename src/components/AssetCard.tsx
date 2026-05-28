@@ -643,8 +643,8 @@ export const AssetCard: React.FC<AssetCardProps> = React.memo(({
     return (
       <>
         <div
-          onClick={() => onSelect(asset)}
-          onDoubleClick={() => onQuickLook?.(asset)}
+          onClick={() => { onSelect(asset); onQuickLook?.(asset); }}
+          onDoubleClick={() => { /* single click already opens QuickLook */ }}
           onContextMenu={handleContextMenu}
           onMouseEnter={onEnter}
           onMouseLeave={onLeave}
@@ -703,8 +703,8 @@ export const AssetCard: React.FC<AssetCardProps> = React.memo(({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onClick={() => { if (!scrubMode && !dragTriggered.current) onSelect(asset); }}
-        onDoubleClick={() => { if (!scrubMode) onQuickLook?.(asset); }}
+        onClick={() => { if (!scrubMode && !dragTriggered.current) { onSelect(asset); onQuickLook?.(asset); } }}
+        onDoubleClick={() => { /* single click already opens QuickLook */ }}
         onContextMenu={handleContextMenu}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
