@@ -1220,6 +1220,10 @@ pub fn launch_app(editor_type: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::path::Path;
+        #[cfg(target_os = "windows")]
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let et = editor_type.to_lowercase();
         if et == "premiere" {
             let adobe_dir = Path::new("C:\\Program Files\\Adobe");
@@ -1232,7 +1236,9 @@ pub fn launch_app(editor_type: String) -> Result<(), String> {
                                 if name.contains("Adobe Premiere Pro") {
                                     let exe_path = path.join("Adobe Premiere Pro.exe");
                                     if exe_path.exists() {
-                                        std::process::Command::new(exe_path).spawn().map_err(|e| e.to_string())?;
+                                        std::process::Command::new(exe_path)
+                                            .creation_flags(CREATE_NO_WINDOW)
+                                            .spawn().map_err(|e| e.to_string())?;
                                         return Ok(());
                                     }
                                 }
@@ -1243,16 +1249,20 @@ pub fn launch_app(editor_type: String) -> Result<(), String> {
             }
             std::process::Command::new("cmd")
                 .args(&["/C", "start", "premiere"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .map_err(|e| e.to_string())?;
         } else if et == "davinci" {
             let resolve_path = Path::new("C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe");
             if resolve_path.exists() {
-                std::process::Command::new(resolve_path).spawn().map_err(|e| e.to_string())?;
+                std::process::Command::new(resolve_path)
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn().map_err(|e| e.to_string())?;
                 return Ok(());
             }
             std::process::Command::new("cmd")
                 .args(&["/C", "start", "resolve"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .map_err(|e| e.to_string())?;
         }
@@ -3090,13 +3100,19 @@ pub fn get_app_version(app: tauri::AppHandle) -> String {
 /// Avoids heavy reqwest crate dependency.
 #[tauri::command]
 pub fn check_for_updates() -> Result<serde_json::Value, String> {
-    let output = std::process::Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-Command",
-            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-RestMethod -Uri 'https://api.github.com/repos/benzsiangco/VizWall-Manager/releases/latest' | ConvertTo-Json -Depth 5"
-        ])
-        .output()
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args(&[
+        "-NoProfile",
+        "-Command",
+        "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-RestMethod -Uri 'https://api.github.com/repos/benzsiangco/VizWall-Manager/releases/latest' | ConvertTo-Json -Depth 5"
+    ]);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd.output()
         .map_err(|e| format!("Failed to run PowerShell update check: {}", e))?;
 
     if !output.status.success() {
@@ -3114,6 +3130,9 @@ pub fn check_for_updates() -> Result<serde_json::Value, String> {
 /// Downloads the specified installer via native PowerShell, starts it, and terminates the active app.
 #[tauri::command]
 pub fn download_and_install_update(url: String) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
     let temp_dir = std::env::temp_dir();
     let file_name = url.split('/').last().unwrap_or("vizwall-setup.exe");
     let is_msi = file_name.to_lowercase().ends_with(".msi");
@@ -3123,26 +3142,31 @@ pub fn download_and_install_update(url: String) -> Result<String, String> {
     let dest_path = dest_file.to_string_lossy().to_string();
 
     // Use PowerShell Invoke-WebRequest to download the installer
-    let status = std::process::Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-Command",
-            &format!(
-                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
-                url, dest_path
-            )
-        ])
-        .status()
+    let mut dl_cmd = std::process::Command::new("powershell");
+    dl_cmd.args(&[
+        "-NoProfile",
+        "-Command",
+        &format!(
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+            url, dest_path
+        )
+    ]);
+    #[cfg(target_os = "windows")]
+    dl_cmd.creation_flags(0x08000000);
+
+    let status = dl_cmd.status()
         .map_err(|e| format!("Failed to start download process: {}", e))?;
 
     if !status.success() {
         return Err("PowerShell downloader returned a non-zero exit code".to_string());
     }
 
-    // Spawn the installer cleanly through cmd so it runs with elevation/GUI prompts
-    std::process::Command::new("cmd")
-        .args(&["/C", "start", "", &dest_path])
-        .spawn()
+    // Spawn the installer — use "start" so it gets its own window/elevation prompt
+    let mut spawn_cmd = std::process::Command::new("cmd");
+    spawn_cmd.args(&["/C", "start", "", &dest_path]);
+    #[cfg(target_os = "windows")]
+    spawn_cmd.creation_flags(0x08000000);
+    spawn_cmd.spawn()
         .map_err(|e| format!("Failed to spawn installer process: {}", e))?;
 
     // Gracefully exit so the installer can replace files without locks

@@ -63,12 +63,16 @@ pub fn install_premiere_plugin(app_handle: &tauri::AppHandle) -> Result<(), Box<
 #[cfg(target_os = "windows")]
 fn configure_player_debug_mode() -> Result<(), Box<dyn std::error::Error>> {
     use std::process::Command;
-    
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     // We set debug mode for CSXS versions 8 through 12 to cover Premiere CC 2018 through 2024+
     for version in 8..=12 {
         let key = format!("HKCU\\Software\\Adobe\\CSXS.{}", version);
         let status = Command::new("reg")
             .args(&["add", &key, "/v", "PlayerDebugMode", "/t", "REG_SZ", "/d", "1", "/f"])
+            .creation_flags(CREATE_NO_WINDOW)
             .status();
         
         match status {
