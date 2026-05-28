@@ -854,7 +854,10 @@ function createFolderTreeDom(node, depth = 0) {
         const rect = item.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         
-        if (hasChildren && clickX < 24) {
+        const isChevronClick = e.target.classList.contains('tree-chevron') || 
+                               (clickX < (20 + depth * 12) && !e.target.closest('.tree-icon'));
+        
+        if (hasChildren && isChevronClick) {
             e.stopPropagation();
             if (isOpen) {
                 openFolders.delete(node.path);
@@ -1179,6 +1182,24 @@ function renderAssets(assets) {
         // Single click to import asset directly to Premiere Pro
         card.addEventListener('click', (e) => {
             importToPremiere(asset.path);
+        });
+        
+        // Make card draggable to allow drag-and-drop to timeline or project bin
+        card.setAttribute('draggable', 'true');
+        card.addEventListener('dragstart', (e) => {
+            const fileUrl = formatFileUrl(asset.path);
+            const fileName = asset.path.split(/[/\\]/).pop();
+            
+            // Set DownloadURL for Premiere Pro timeline/bin import
+            e.dataTransfer.setData("DownloadURL", `application/octet-stream:${fileName}:${fileUrl}`);
+            
+            // Set text/uri-list for general file drag and drop support
+            e.dataTransfer.setData("text/uri-list", fileUrl);
+            
+            // Set text/plain as fallback absolute path
+            e.dataTransfer.setData("text/plain", asset.path);
+            
+            e.dataTransfer.effectAllowed = "copy";
         });
         
         scrollArea.appendChild(card);
