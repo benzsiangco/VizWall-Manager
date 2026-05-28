@@ -546,13 +546,17 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            cursor: pointer;
+            cursor: grab;
             transition: all 0.2s ease;
         }
 
         .asset-card:hover {
             border-color: rgba(139, 92, 246, 0.4);
             box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+        }
+        
+        .asset-card:active {
+            cursor: grabbing;
         }
 
         .card-thumb-area {

@@ -1184,23 +1184,60 @@ function renderAssets(assets) {
             importToPremiere(asset.path);
         });
         
-        // Make card draggable to allow drag-and-drop to timeline or project bin
-        card.setAttribute('draggable', 'true');
-        card.addEventListener('dragstart', (e) => {
-            const fileUrl = formatFileUrl(asset.path);
-            const fileName = asset.path.split(/[/\\]/).pop();
+        // ── Drag to timeline / project bin ───────────────────────────────
+        // HTML5 dataTransfer does NOT work for dropping into Premiere's timeline
+        // from a CEP panel. We must use the native CEP drag API instead.
+        // Strategy:
+        //   mousedown → record start position
+        //   mousemove → once moved >4px, call window.__adobe_cep__.startDrag()
+        //               which hands the drag off to the OS/Premiere natively
+        //   mouseup   → cancel if drag never started (treat as click)
+        
+        let dragStartX = 0, dragStartY = 0, dragInitiated = false;
+        
+        card.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return; // left button only
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragInitiated = false;
             
-            // Set DownloadURL for Premiere Pro timeline/bin import
-            e.dataTransfer.setData("DownloadURL", `application/octet-stream:${fileName}:${fileUrl}`);
+            const onMouseMove = (me) => {
+                const dx = me.clientX - dragStartX;
+                const dy = me.clientY - dragStartY;
+                if (!dragInitiated && Math.sqrt(dx * dx + dy * dy) > 4) {
+                    dragInitiated = true;
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    
+                    // Use native CEP drag — this is what allows dropping into
+                    // Premiere's timeline and project bin from a panel.
+                    // The path must be an absolute OS path (backslashes on Windows).
+                    const nativePath = asset.path.replace(/\//g, '\\');
+                    
+                    if (window.__adobe_cep__) {
+                        // CEP native file drag — works with Premiere timeline
+                        window.__adobe_cep__.startDrag(
+                            'application/x-premiere-project-item',
+                            nativePath
+                        );
+                    } else {
+                        // Fallback for non-CEP environments (dev/testing)
+                        console.log('CEP not available, would drag:', nativePath);
+                    }
+                }
+            };
             
-            // Set text/uri-list for general file drag and drop support
-            e.dataTransfer.setData("text/uri-list", fileUrl);
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
             
-            // Set text/plain as fallback absolute path
-            e.dataTransfer.setData("text/plain", asset.path);
-            
-            e.dataTransfer.effectAllowed = "copy";
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
         });
+        
+        // Keep draggable=true as a hint but the actual drag is handled above
+        card.setAttribute('draggable', 'false');
         
         scrollArea.appendChild(card);
     });
