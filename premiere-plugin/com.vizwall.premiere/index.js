@@ -1,4 +1,4 @@
-// JS script for VizWall Premiere Plugin
+// JS script for VizWall Premiere Plugin with Previews Grid, Docked Sidebar & Audio Waveforms
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -11,10 +11,96 @@ const searchInput = document.getElementById('searchInput');
 const scrollArea = document.getElementById('scrollArea');
 const refreshBtn = document.getElementById('refreshBtn');
 
+const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+const sidebar = document.getElementById('sidebar');
+const folderTree = document.getElementById('folderTree');
+const activeFolderRow = document.getElementById('activeFolderRow');
+const activeFolderName = document.getElementById('activeFolderName');
+const clearFolderFilterBtn = document.getElementById('clearFolderFilterBtn');
+const gridSlider = document.getElementById('gridSlider');
+const sortSelect = document.getElementById('sortSelect');
+
 let db = null;
 let SQL = null;
 let currentProjectId = '';
+let currentProjectPath = '';
+let libraryPath = '';
 let assetsCache = [];
+let projectsMap = {}; // Maps project_id -> { name, path }
+
+let selectedFolder = ''; // Path filter relative to project root
+let openFolders = new Set(); // Stores expanded folder tree paths
+
+const audioWaveforms = {}; // Cache decoded waveform data and playback state: { id: { data, duration } }
+const activeAudioPlayers = {}; // Cache active HTML5 Audio elements
+
+// Category → icon & styling config matching standalone app
+const CATEGORY_ICON_MAP = {
+    SFX:           { icon: '🎵', color: '#fb923c' }, // text-orange-400
+    MUSIC:         { icon: '🎵', color: '#34d399' }, // text-emerald-400
+    AUDIO:         { icon: '🎵', color: '#60a5fa' }, // text-blue-400
+    VOICEOVER:     { icon: '🎵', color: '#38bdf8' }, // text-sky-400
+    A_ROLL:        { icon: '🎥', color: '#f87171' }, // text-red-400
+    B_ROLL:        { icon: '🎥', color: '#c084fc' }, // text-violet-400
+    EXPORTS:       { icon: '💿', color: '#2dd4bf' }, // text-teal-400
+    GRAPHICS:      { icon: '🎨', color: '#22d3ee' }, // text-cyan-400
+    THUMBNAILS:    { icon: '🎨', color: '#f472b6' }, // text-pink-400
+    PROJECT_FILES: { icon: '📝', color: '#fbbf24' }, // text-amber-400
+    ARCHIVE:       { icon: '📦', color: '#94a3b8' }, // text-slate-400
+};
+
+// Folder type overrides keys (stored in localStorage)
+const FOLDER_TYPE_KEY = "vizwall_folder_types";
+
+function getFolderTypes() {
+    try {
+        return JSON.parse(localStorage.getItem(FOLDER_TYPE_KEY) || "{}");
+    } catch (e) {
+        return {};
+    }
+}
+
+function setFolderType(folderPath, category) {
+    const types = getFolderTypes();
+    if (category === "") {
+        delete types[folderPath];
+    } else {
+        types[folderPath] = category;
+    }
+    localStorage.setItem(FOLDER_TYPE_KEY, JSON.stringify(types));
+}
+
+// Setup grid slider listener
+gridSlider.addEventListener('input', () => {
+    scrollArea.style.setProperty('--grid-cols', gridSlider.value);
+});
+
+// Setup sidebar toggle listeners
+toggleSidebarBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    toggleSidebarBtn.classList.toggle('active');
+});
+
+closeSidebarBtn.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    toggleSidebarBtn.classList.remove('active');
+});
+
+clearFolderFilterBtn.addEventListener('click', () => {
+    clearFolderFilter();
+});
+
+sortSelect.addEventListener('change', () => {
+    filterAndRenderAssets();
+});
+
+function clearFolderFilter() {
+    selectedFolder = '';
+    activeFolderRow.style.display = 'none';
+    filterAndRenderAssets();
+    updateFolderTreeUI();
+}
 
 // Locate local vizwall.db path in AppData
 function getDbPath() {
@@ -27,20 +113,137 @@ function getDbPath() {
 
 // Format bytes to readable size
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// Format seconds into MM:SS
+function formatDuration(sec) {
+    if (sec == null || sec <= 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 // Escapes file paths for ExtendScript
 function escapePath(filePath) {
-    // Replace single backslashes with double backslashes
     return filePath.replace(/\\/g, '\\\\');
 }
 
-// Initialise Database Connection using sql.js (pure JS/Wasm SQLite)
+// Formats paths for CEF file:/// URL (Uses encodeURI to preserve drive colon like D:)
+function formatFileUrl(filePath) {
+    if (!filePath) return '';
+    let normalized = filePath.replace(/\\/g, '/');
+    if (!normalized.startsWith('/')) {
+        normalized = '/' + normalized;
+    }
+    return 'file://' + encodeURI(normalized);
+}
+
+// Recursive local directory scanner for global library assets (no DB)
+function scanFolderAssets(dirPath) {
+    let assets = [];
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+    function walk(dir) {
+        if (!fs.existsSync(dir)) return;
+        let entries = [];
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch (e) {
+            console.error("Read dir error:", e);
+            return;
+        }
+
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                walk(fullPath);
+                continue;
+            }
+            
+            const name = entry.name;
+            if (name.startsWith('.')) continue; // skip hidden
+            
+            const ext = path.extname(name).toLowerCase().replace('.', '');
+            const stem = path.basename(name, path.extname(name)).toLowerCase();
+            
+            let category = '';
+            let mimeType = '';
+            
+            // Asset classification matching Rust backend
+            if (["mp4", "mov", "mkv", "avi", "mxf", "m4v", "wmv", "webm", "ts", "mp2t"].includes(ext)) {
+                if (stem.includes("export") || stem.includes("final") || stem.includes("render") || stem.includes("master")) {
+                    category = "EXPORTS";
+                } else if (stem.includes("a_roll") || stem.includes("aroll") || stem.includes("interview") || stem.includes("talking")) {
+                    category = "A_ROLL";
+                } else {
+                    category = "B_ROLL";
+                }
+                mimeType = "video/mp4";
+            } else if (["mp3", "wav", "aac", "flac", "ogg", "m4a", "aiff", "aif", "wma"].includes(ext)) {
+                if (stem.includes("music") || stem.includes("track") || stem.includes("beat") || stem.includes("bgm") || stem.includes("score") || stem.includes("ost") || stem.includes("theme") || stem.includes("loop")) {
+                    category = "MUSIC";
+                } else {
+                    category = "SFX";
+                }
+                mimeType = "audio/wav";
+            } else if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "svg", "avif"].includes(ext)) {
+                if (stem.includes("thumb") || stem.includes("cover") || stem.includes("poster") || stem.includes("banner")) {
+                    category = "THUMBNAILS";
+                } else {
+                    category = "GRAPHICS";
+                }
+                mimeType = "image/jpeg";
+            } else if (["mogrt", "mogrts", "aet", "aepx", "ffx", "prfpset", "jsx", "jsxbin", "ttf", "otf", "woff", "woff2", "eot", "cube", "3dl", "lut"].includes(ext)) {
+                category = "GRAPHICS";
+                mimeType = "application/octet-stream";
+            } else {
+                continue; // skip other extensions
+            }
+            
+            let stat;
+            try {
+                stat = fs.statSync(fullPath);
+            } catch (e) {
+                continue;
+            }
+            
+            const size = stat.size;
+            const mtimeStr = stat.mtime.toISOString().replace('T', ' ').slice(0, 19);
+            
+            // Simple hash id
+            let hash = 0;
+            for (let i = 0; i < fullPath.length; i++) {
+                hash = (hash << 5) - hash + fullPath.charCodeAt(i);
+                hash |= 0;
+            }
+            const id = 'lib_' + Math.abs(hash).toString(16);
+            
+            assets.push({
+                id,
+                project_id: "GLOBAL_LIBRARY",
+                name,
+                original_name: name,
+                path: fullPath,
+                size,
+                mime_type: mimeType,
+                category,
+                thumbnail_path: null,
+                duration: null,
+                created_at: mtimeStr
+            });
+        }
+    }
+    
+    walk(dirPath);
+    return assets;
+}
+
+// Initialise Database Connection
 function initDatabase() {
     const dbPath = getDbPath();
     console.log("Locating database at:", dbPath);
@@ -54,13 +257,25 @@ function initDatabase() {
     try {
         const filebuffer = fs.readFileSync(dbPath);
         
-        // Initialize sql.js
         initSqlJs({
             locateFile: file => path.join(__dirname, 'lib', file)
         }).then(sqlInstance => {
             SQL = sqlInstance;
             db = new SQL.Database(filebuffer);
             updateStatus(true, "Connected to local database");
+            
+            // Load global library setting
+            try {
+                const stmt = db.prepare("SELECT value FROM ai_settings WHERE key = 'library_path'");
+                if (stmt.step()) {
+                    libraryPath = stmt.getAsObject().value;
+                    console.log("Global library path:", libraryPath);
+                }
+                stmt.free();
+            } catch (e) {
+                console.error("Failed to load library path:", e);
+            }
+
             loadProjects();
             
             projectSelect.disabled = false;
@@ -94,74 +309,682 @@ function loadProjects() {
     if (!db) return;
     
     try {
-        const stmt = db.prepare("SELECT id, name FROM projects WHERE archived = 0 ORDER BY name ASC");
+        const stmt = db.prepare("SELECT id, name, path FROM projects WHERE archived = 0 ORDER BY name ASC");
         
-        // Clear previous options except placeholder
         projectSelect.innerHTML = '<option value="">Select Project...</option>';
+        projectsMap = {};
         
         while (stmt.step()) {
             const row = stmt.getAsObject();
+            projectsMap[row.id] = { name: row.name, path: row.path };
+            
             const option = document.createElement('option');
             option.value = row.id;
             option.textContent = row.name;
             projectSelect.appendChild(option);
         }
         stmt.free();
+
+        // Add Global Library if configured
+        if (libraryPath && fs.existsSync(libraryPath)) {
+            const option = document.createElement('option');
+            option.value = "GLOBAL_LIBRARY";
+            option.textContent = "🌐 Global Library";
+            projectSelect.appendChild(option);
+            projectsMap["GLOBAL_LIBRARY"] = { name: "Global Library", path: libraryPath };
+        }
     } catch (e) {
         console.error("Error loading projects:", e);
         updateStatus(false, "Failed to load projects");
     }
 }
 
-// Load assets for selected project
+// Load assets for selected project or library
 function loadAssets(projectId) {
-    if (!db || !projectId) {
+    // Stop any active audio playbacks
+    Object.values(activeAudioPlayers).forEach(p => {
+        try { p.pause(); } catch(e) {}
+    });
+    
+    selectedFolder = '';
+    activeFolderRow.style.display = 'none';
+    openFolders.clear();
+
+    if (!projectId) {
         assetsCache = [];
+        currentProjectPath = '';
         renderAssets([]);
+        renderFolderTreeUI([]);
         return;
     }
+
+    currentProjectId = projectId;
+    const proj = projectsMap[projectId];
+    currentProjectPath = proj ? proj.path : '';
     
-    try {
-        const stmt = db.prepare("SELECT name, original_name, path, size, category FROM assets WHERE project_id = ? ORDER BY created_at DESC");
-        stmt.bind([projectId]);
-        
-        assetsCache = [];
-        while (stmt.step()) {
-            assetsCache.push(stmt.getAsObject());
-        }
-        stmt.free();
-        
+    if (projectId === "GLOBAL_LIBRARY") {
+        console.log("Loading global library assets from:", libraryPath);
+        assetsCache = scanFolderAssets(libraryPath);
         filterAndRenderAssets();
-    } catch (e) {
-        console.error("Error loading assets:", e);
-        renderEmptyState("Query Failed", "Failed to retrieve assets from database.");
+        renderFolderTreeUI(getDisplayAssets());
+    } else if (db) {
+        try {
+            const stmt = db.prepare("SELECT name, original_name, path, size, category, thumbnail_path, duration, created_at FROM assets WHERE project_id = ? ORDER BY created_at DESC");
+            stmt.bind([projectId]);
+            
+            assetsCache = [];
+            while (stmt.step()) {
+                assetsCache.push(stmt.getAsObject());
+            }
+            stmt.free();
+            
+            filterAndRenderAssets();
+            renderFolderTreeUI(getDisplayAssets());
+        } catch (e) {
+            console.error("Error loading assets:", e);
+            renderEmptyState("Query Failed", "Failed to retrieve assets from database.");
+        }
     }
 }
 
-// Filter cached assets by search query and render
-function filterAndRenderAssets() {
-    const query = searchInput.value.toLowerCase().trim();
-    if (!query) {
-        renderAssets(assetsCache);
-        return;
-    }
+// Returns assets with folder overrides dynamically applied
+function getDisplayAssets() {
+    const folderTypes = getFolderTypes();
+    const normRoot = currentProjectPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     
-    const filtered = assetsCache.filter(asset => {
-        return (asset.name && asset.name.toLowerCase().includes(query)) ||
-               (asset.original_name && asset.original_name.toLowerCase().includes(query)) ||
-               (asset.category && asset.category.toLowerCase().includes(query));
+    return assetsCache.map(asset => {
+        const normAsset = asset.path.replace(/\\/g, '/');
+        const normAssetLower = normAsset.toLowerCase();
+        
+        let rel = normAsset;
+        if (normRoot && normAssetLower.startsWith(normRoot)) {
+            rel = normAsset.slice(normRoot.length).replace(/^[/\\]+/, '');
+        } else {
+            rel = normAsset.split('/').pop() || normAsset;
+        }
+        
+        const parts = rel.split('/');
+        parts.pop(); // Remove file name
+        
+        let overrideCat = null;
+        for (let i = parts.length; i >= 1; i--) {
+            const folderPath = parts.slice(0, i).join('/');
+            const override = folderTypes[folderPath] || folderTypes[folderPath.toLowerCase()];
+            if (override) {
+                overrideCat = override;
+                break;
+            }
+        }
+        
+        if (overrideCat) {
+            return {
+                ...asset,
+                category: overrideCat
+            };
+        }
+        return asset;
     });
+}
+
+// Helper to filter assets by folder selection and search query, then render
+function filterAndRenderAssets() {
+    let filtered = getDisplayAssets();
+
+    // 1. Folder Tree Filter
+    if (selectedFolder && currentProjectPath) {
+        const normRoot = currentProjectPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        filtered = filtered.filter(asset => {
+            const normPath = asset.path.replace(/\\/g, '/');
+            const normPathLower = normPath.toLowerCase();
+            
+            let rel = normPath;
+            if (normRoot && normPathLower.startsWith(normRoot)) {
+                rel = normPath.slice(normRoot.length).replace(/^[/\\]+/, '');
+            }
+            
+            const parts = rel.split('/');
+            parts.pop(); // Remove filename
+            const assetFolder = parts.join('/');
+            
+            return assetFolder === selectedFolder || assetFolder.startsWith(selectedFolder + '/');
+        });
+    }
+
+    // 2. Search Filter
+    const query = searchInput.value.toLowerCase().trim();
+    if (query) {
+        filtered = filtered.filter(asset => {
+            return (asset.name && asset.name.toLowerCase().includes(query)) ||
+                   (asset.original_name && asset.original_name.toLowerCase().includes(query)) ||
+                   (asset.category && asset.category.toLowerCase().includes(query));
+        });
+    }
+
+    // 3. Sort Filter (With safe defaults to prevent crashes)
+    const sortVal = sortSelect.value;
+    const [field, order] = sortVal.split('-');
     
+    filtered.sort((a, b) => {
+        let comparison = 0;
+        if (field === 'name') {
+            const nameA = (a.name || '').toLowerCase();
+            const nameB = (b.name || '').toLowerCase();
+            comparison = nameA.localeCompare(nameB);
+        } else if (field === 'size') {
+            const sizeA = a.size || 0;
+            const sizeB = b.size || 0;
+            comparison = sizeA - sizeB;
+        } else if (field === 'created_at') {
+            const dateA = a.created_at || '';
+            const dateB = b.created_at || '';
+            comparison = dateA.localeCompare(dateB);
+            // Fallback to name if created_at is identical
+            if (comparison === 0) {
+                const nameA = (a.name || '').toLowerCase();
+                const nameB = (b.name || '').toLowerCase();
+                comparison = nameA.localeCompare(nameB);
+            }
+        }
+        
+        return order === 'asc' ? comparison : -comparison;
+    });
+
     renderAssets(filtered);
 }
 
-// Render asset list in panel UI
+// Renders the folder tree list in the sidebar
+function renderFolderTreeUI(assets) {
+    folderTree.innerHTML = '';
+    if (!assets || assets.length === 0 || !currentProjectPath) return;
+
+    const rootNode = buildFolderTree(assets, currentProjectPath);
+    
+    // Auto expand immediate top-level children
+    rootNode.children.forEach(child => {
+        openFolders.add(child.path);
+    });
+
+    const treeHtml = createFolderTreeDom(rootNode);
+    folderTree.appendChild(treeHtml);
+}
+
+// Triggers redraw of folder tree when node collapse/expand occurs
+function updateFolderTreeUI() {
+    folderTree.innerHTML = '';
+    const rootNode = buildFolderTree(getDisplayAssets(), currentProjectPath);
+    const treeHtml = createFolderTreeDom(rootNode);
+    folderTree.appendChild(treeHtml);
+}
+
+// Builds the hierarchical folder tree data structure
+function buildFolderTree(assets, projectPath) {
+    const root = { name: "All Files", path: "", children: [], assetCount: assets.length };
+    const nodeMap = new Map();
+    const categoryCounts = new Map();
+    nodeMap.set("", root);
+
+    const normRoot = projectPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const folderTypes = getFolderTypes();
+
+    for (const asset of assets) {
+        const normAsset = asset.path.replace(/\\/g, '/');
+        const normAssetLower = normAsset.toLowerCase();
+
+        let rel = "";
+        if (normRoot && normAssetLower.startsWith(normRoot)) {
+            rel = normAsset.slice(normRoot.length).replace(/^[/\\]+/, '');
+        } else {
+            rel = normAsset.split('/').pop() || normAsset;
+        }
+
+        const parts = rel.split('/');
+        parts.pop(); // remove file name
+
+        let currentPath = "";
+        const folderPaths = [];
+        for (const part of parts) {
+            if (!part) continue;
+            const parentPath = currentPath;
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            folderPaths.push(currentPath);
+
+            if (!nodeMap.has(currentPath)) {
+                const override = folderTypes[currentPath] || folderTypes[currentPath.toLowerCase()];
+                const node = {
+                    name: part,
+                    path: currentPath,
+                    children: [],
+                    assetCount: 0,
+                    overrideCategory: override
+                };
+                nodeMap.set(currentPath, node);
+                const parent = nodeMap.get(parentPath) || root;
+                parent.children.push(node);
+            }
+        }
+
+        // Increment counts and category stats for this folder and all ancestors
+        for (let i = folderPaths.length - 1; i >= 0; i--) {
+            const p = folderPaths[i];
+            const node = nodeMap.get(p);
+            if (node) {
+                node.assetCount++;
+                if (!categoryCounts.has(p)) {
+                    categoryCounts.set(p, {});
+                }
+                const counts = categoryCounts.get(p);
+                counts[asset.category] = (counts[asset.category] || 0) + 1;
+            }
+        }
+    }
+
+    // Compute dominant category from counts
+    for (const [path, node] of nodeMap) {
+        if (!path) continue;
+        const counts = categoryCounts.get(path);
+        if (counts) {
+            const sortedCounts = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            if (sortedCounts.length > 0) {
+                node.dominantCategory = sortedCounts[0][0];
+            }
+        }
+    }
+
+    const sortNode = (n) => {
+        n.children.sort((a, b) => a.name.localeCompare(b.name));
+        n.children.forEach(sortNode);
+    };
+    sortNode(root);
+
+    return root;
+}
+
+// Right-click menu to override folder category
+function showFolderTypeMenu(x, y, node) {
+    const existing = document.getElementById('folderTypeMenu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'folderTypeMenu';
+    menu.style.position = 'fixed';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.zIndex = '9999';
+    menu.style.backgroundColor = '#0c0a14';
+    menu.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+    menu.style.borderRadius = '10px';
+    menu.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.6)';
+    menu.style.padding = '4px 0';
+    menu.style.width = '160px';
+
+    const header = document.createElement('div');
+    header.style.padding = '6px 10px';
+    header.style.fontSize = '9px';
+    header.style.fontWeight = 'bold';
+    header.style.color = 'rgba(255, 255, 255, 0.3)';
+    header.style.textTransform = 'uppercase';
+    header.style.letterSpacing = '0.5px';
+    header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+    header.textContent = 'Set Folder Type';
+    menu.appendChild(header);
+
+    const options = [
+        { value: 'SFX', label: 'SFX', color: '#fb923c' },
+        { value: 'MUSIC', label: 'Music', color: '#34d399' },
+        { value: 'GRAPHICS', label: 'Graphics', color: '#22d3ee' },
+        { value: 'THUMBNAILS', label: 'Thumbnails', color: '#f472b6' },
+        { value: 'B_ROLL', label: 'B-Roll', color: '#c084fc' },
+        { value: 'A_ROLL', label: 'A-Roll', color: '#f87171' },
+        { value: 'EXPORTS', label: 'Exports', color: '#2dd4bf' },
+        { value: 'PROJECT_FILES', label: 'Project Files', color: '#fbbf24' },
+        { value: '', label: 'Auto-detect', color: '#94a3b8' }
+    ];
+
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.style.width = '100%';
+        btn.style.background = 'none';
+        btn.style.border = 'none';
+        btn.style.padding = '6px 10px';
+        btn.style.color = node.overrideCategory === opt.value ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)';
+        btn.style.textAlign = 'left';
+        btn.style.fontFamily = 'inherit';
+        btn.style.fontSize = '11px';
+        btn.style.cursor = 'pointer';
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.gap = '8px';
+        btn.style.transition = 'background-color 0.15s ease';
+
+        if (node.overrideCategory === opt.value) {
+            btn.style.backgroundColor = 'rgba(139, 92, 246, 0.1)';
+        }
+
+        btn.addEventListener('mouseenter', () => {
+            btn.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.backgroundColor = node.overrideCategory === opt.value ? 'rgba(139, 92, 246, 0.1)' : 'transparent';
+        });
+
+        btn.addEventListener('click', () => {
+            setFolderType(node.path, opt.value);
+            menu.remove();
+            filterAndRenderAssets();
+            updateFolderTreeUI();
+        });
+
+        const dot = document.createElement('span');
+        dot.style.width = '6px';
+        dot.style.height = '6px';
+        dot.style.borderRadius = '50%';
+        dot.style.backgroundColor = opt.color;
+        btn.appendChild(dot);
+
+        const text = document.createElement('span');
+        text.textContent = opt.label;
+        btn.appendChild(text);
+
+        menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+
+    const dismiss = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('mousedown', dismiss);
+        }
+    };
+    document.addEventListener('mousedown', dismiss);
+}
+
+// Recursively builds the DOM tree for the Sidebar Folders
+function createFolderTreeDom(node, depth = 0) {
+    const row = document.createElement('div');
+    row.className = 'tree-node-row';
+    
+    const item = document.createElement('button');
+    item.className = 'tree-item';
+    if (selectedFolder === node.path) {
+        item.classList.add('selected');
+    }
+    
+    item.style.paddingLeft = (8 + depth * 12) + 'px';
+    
+    const hasChildren = node.children && node.children.length > 0;
+    const isOpen = openFolders.has(node.path);
+    
+    let chevronHtml = '<span class="tree-chevron"></span>';
+    if (hasChildren) {
+        chevronHtml = `<span class="tree-chevron ${isOpen ? 'open' : ''}">▸</span>`;
+    }
+    
+    // Icon selection based on overrides and dominant category
+    let icon = '📁';
+    let iconColor = 'rgba(255, 255, 255, 0.4)';
+    
+    const effectiveCat = node.overrideCategory || node.dominantCategory;
+    if (effectiveCat && CATEGORY_ICON_MAP[effectiveCat]) {
+        const cfg = CATEGORY_ICON_MAP[effectiveCat];
+        icon = cfg.icon;
+        iconColor = cfg.color;
+    } else {
+        // Fallback: name-based detection
+        const n = node.name.toUpperCase();
+        if (node.path === '') {
+            icon = '🗂️';
+        } else if (n.includes('SFX') || n.includes('SOUND') || n.includes('FOLEY') || n.includes('RISER')
+            || n.includes('STINGER') || n.includes('WHOOSH') || n.includes('IMPACT')) {
+            icon = '🎵';
+            iconColor = '#fb923c';
+        } else if (n.includes('MUSIC') || n.includes('BEAT') || n.includes('TRACK') || n.includes('AUDIO')
+            || n.includes('AMBIENCE') || n.includes('AMBIENT')) {
+            icon = '🎵';
+            iconColor = '#34d399';
+        } else if (n.includes('A_ROLL') || n.includes('AROLL') || n.includes('INTERVIEW')) {
+            icon = '🎥';
+            iconColor = '#f87171';
+        } else if (n.includes('B_ROLL') || n.includes('BROLL') || n.includes('MEDIA') || n.includes('FOOTAGE')
+            || n.includes('VIDEO') || n.includes('STOCK') || n.includes('DRONE')) {
+            icon = '🎥';
+            iconColor = '#c084fc';
+        } else if (n.includes('GRAPHIC') || n.includes('THUMB') || n.includes('PNG') || n.includes('LOGO')
+            || n.includes('OVERLAY') || n.includes('MOTION') || n.includes('TEMPLATE') || n.includes('GFX')
+            || n.includes('FONT') || n.includes('LUT') || n.includes('MOGRT')) {
+            icon = '🎨';
+            iconColor = '#22d3ee';
+        } else if (n.includes('EXPORT') || n.includes('DELIVER') || n.includes('FINAL') || n.includes('RENDER')) {
+            icon = '💿';
+            iconColor = '#2dd4bf';
+        } else if (n.includes('PROJECT') || n.includes('PREMIERE') || n.includes('RESOLVE')) {
+            icon = '📝';
+            iconColor = '#fbbf24';
+        } else if (n.includes('ARCHIVE')) {
+            icon = '📦';
+            iconColor = '#94a3b8';
+        } else if (isOpen) {
+            icon = '📂';
+        }
+    }
+    
+    item.innerHTML = `
+        ${chevronHtml}
+        <span class="tree-icon" style="margin-right: 4px; color: ${iconColor};">${icon}</span>
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-grow:1;">
+            ${node.name === '' ? 'All Files' : node.name.replace(/_/g, ' ')}
+        </span>
+        ${node.overrideCategory ? `<span style="font-size: 7px; font-weight: bold; color: rgba(139, 92, 246, 0.60); font-family: monospace; margin-right: 4px;">${node.overrideCategory.replace('_', ' ')}</span>` : ''}
+        <span class="tree-count">${node.assetCount}</span>
+    `;
+    
+    // Left click selects/expands
+    item.addEventListener('click', (e) => {
+        const rect = item.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        
+        if (hasChildren && clickX < 24) {
+            e.stopPropagation();
+            if (isOpen) {
+                openFolders.delete(node.path);
+            } else {
+                openFolders.add(node.path);
+            }
+            updateFolderTreeUI();
+            return;
+        }
+        
+        selectedFolder = node.path;
+        activeFolderName.textContent = node.name === '' ? 'All Files' : node.name.replace(/_/g, ' ');
+        activeFolderRow.style.display = node.path === '' ? 'none' : 'flex';
+        
+        filterAndRenderAssets();
+        updateFolderTreeUI();
+    });
+
+    // Right click triggers Folder Type override context menu
+    item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showFolderTypeMenu(e.clientX, e.clientY, node);
+    });
+    
+    row.appendChild(item);
+    
+    if (hasChildren && (isOpen || node.path === '')) {
+        const childContainer = document.createElement('div');
+        node.children.forEach(child => {
+            childContainer.appendChild(createFolderTreeDom(child, depth + 1));
+        });
+        row.appendChild(childContainer);
+    }
+    
+    return row;
+}
+
+// Draw static placeholder waveform inside canvas
+function drawPlaceholderWaveform(ctx, W, H) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'; // faint violet
+    const barsCount = 35;
+    const barW = W / barsCount;
+    for (let i = 0; i < barsCount; i++) {
+        const x = i * barW;
+        const h = 8 + Math.sin(i * 0.4) * 12;
+        const y = (H - h) / 2;
+        ctx.fillRect(x + 1, y, barW - 1, h);
+    }
+}
+
+// Draw decoded array waveform inside canvas
+function drawDecodedWave(ctx, W, H, data, progress = 0) {
+    ctx.clearRect(0, 0, W, H);
+    const barW = W / data.length;
+    const progressX = progress * W;
+    
+    for (let i = 0; i < data.length; i++) {
+        const x = i * barW;
+        const val = data[i];
+        const h = Math.max(3, val * H * 0.85);
+        const y = (H - h) / 2;
+        
+        if (x < progressX) {
+            ctx.fillStyle = '#34d399'; // Emerald for played
+        } else {
+            ctx.fillStyle = 'rgba(139, 92, 246, 0.45)'; // Violet/lavender for unplayed
+        }
+        ctx.fillRect(x + 0.5, y, Math.max(1, barW - 1), h);
+    }
+}
+
+// Asynchronously loads and decodes audio files to draw custom waveforms (Accepts canvas element directly)
+function drawAudioWaveform(filePath, canvas, assetId) {
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const W = canvas.width = 300;
+    const H = canvas.height = 80;
+    
+    drawPlaceholderWaveform(ctx, W, H);
+    
+    if (!fs.existsSync(filePath)) return;
+    
+    // Read file using Node.js fs module (prevents browser CORS or absolute-path bugs)
+    fs.readFile(filePath, (err, buffer) => {
+        if (err) return;
+        
+        let arrayBuffer;
+        if (buffer.buffer) {
+            arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+        } else {
+            arrayBuffer = new Uint8Array(buffer).buffer;
+        }
+        
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        audioCtx.decodeAudioData(arrayBuffer, (decodedData) => {
+            const raw = decodedData.getChannelData(0);
+            const bars = 70;
+            const step = Math.floor(raw.length / bars);
+            const data = new Float32Array(bars);
+            
+            for (let i = 0; i < bars; i++) {
+                let max = 0;
+                for (let j = 0; j < step; j++) {
+                    const idx = i * step + j;
+                    if (idx < raw.length) {
+                        max = Math.max(max, Math.abs(raw[idx]));
+                    }
+                }
+                data[i] = max;
+            }
+            
+            audioWaveforms[assetId] = {
+                data: data,
+                duration: decodedData.duration
+            };
+            
+            drawDecodedWave(ctx, W, H, data, 0);
+            audioCtx.close();
+        }, (e) => {
+            console.error("Decode fail:", filePath, e);
+        });
+    });
+}
+
+// Setup audio listeners for interactive playback & playhead progression (Accepts canvas element directly)
+function setupAudioCardListeners(card, asset, canvas) {
+    let animFrame = null;
+    let audio = null;
+    
+    card.addEventListener('mouseenter', () => {
+        // Stop any other currently playing audio players first
+        Object.keys(activeAudioPlayers).forEach(key => {
+            if (key !== asset.id && activeAudioPlayers[key]) {
+                try {
+                    activeAudioPlayers[key].pause();
+                    activeAudioPlayers[key].currentTime = 0;
+                } catch(e) {}
+            }
+        });
+
+        if (!activeAudioPlayers[asset.id]) {
+            audio = new Audio(formatFileUrl(asset.path));
+            audio.volume = 0.85;
+            activeAudioPlayers[asset.id] = audio;
+        } else {
+            audio = activeAudioPlayers[asset.id];
+        }
+        
+        audio.currentTime = 0;
+        audio.play().catch(e => console.error("Audio play error", e));
+        
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        
+        function tick() {
+            const info = audioWaveforms[asset.id];
+            if (info && audio && audio.duration > 0) {
+                const progress = audio.currentTime / audio.duration;
+                drawDecodedWave(ctx, W, H, info.data, progress);
+            }
+            animFrame = requestAnimationFrame(tick);
+        }
+        animFrame = requestAnimationFrame(tick);
+    });
+    
+    card.addEventListener('mouseleave', () => {
+        if (animFrame) cancelAnimationFrame(animFrame);
+        
+        const audio = activeAudioPlayers[asset.id];
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+        
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const info = audioWaveforms[asset.id];
+            if (info) {
+                drawDecodedWave(ctx, canvas.width, canvas.height, info.data, 0);
+            } else {
+                drawPlaceholderWaveform(ctx, canvas.width, canvas.height);
+            }
+        }
+    });
+}
+
+// Render asset grid
 function renderAssets(assets) {
     scrollArea.innerHTML = '';
     
     if (assets.length === 0) {
         if (currentProjectId) {
-            renderEmptyState("No assets found", searchInput.value ? "Try modifying your search." : "This project has no assets imported.");
+            renderEmptyState("No assets found", searchInput.value ? "Try modifying your search." : "This folder contains no assets.");
         } else {
             renderEmptyState("No project selected", "Choose a project from the dropdown above to view assets.");
         }
@@ -169,59 +992,116 @@ function renderAssets(assets) {
     }
     
     assets.forEach(asset => {
-        const item = document.createElement('div');
-        item.className = 'asset-item';
+        const card = document.createElement('div');
+        card.className = 'asset-card';
         
-        // Decide icon based on category
-        let iconSvg = `
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-        `; // default image icon
+        const isVideo = asset.category === "A_ROLL" || asset.category === "B_ROLL";
+        const isAudio = asset.category === "AUDIO" || asset.category === "MUSIC" || asset.category === "SFX" || asset.category === "VOICEOVER";
+        const isImage = asset.category === "THUMBNAILS" || asset.category === "GRAPHICS";
+
+        // Determine thumbnail source
+        let thumbUrl = '';
+        let hasThumb = false;
         
-        const cat = (asset.category || '').toUpperCase();
-        if (cat.includes('MEDIA') || cat.includes('A_ROLL') || cat.includes('B_ROLL') || cat.includes('FOOTAGE')) {
-            iconSvg = `
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                    <line x1="7" y1="2" x2="7" y2="22"></line>
-                    <line x1="17" y1="2" x2="17" y2="22"></line>
-                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                    <line x1="2" y1="7" x2="7" y2="7"></line>
-                    <line x1="2" y1="17" x2="7" y2="17"></line>
-                    <line x1="17" y1="17" x2="22" y2="17"></line>
-                    <line x1="17" y1="7" x2="22" y2="7"></line>
-                </svg>
-            `; // video icon
-        } else if (cat.includes('AUDIO') || cat.includes('MUSIC') || cat.includes('SFX')) {
-            iconSvg = `
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                    <path d="M9 18V5l12-2v13"></path>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <circle cx="18" cy="16" r="3"></circle>
-                </svg>
-            `; // audio icon
+        if (asset.thumbnail_path) {
+            thumbUrl = formatFileUrl(asset.thumbnail_path);
+            hasThumb = true;
+        } else if (isImage && asset.path) {
+            thumbUrl = formatFileUrl(asset.path);
+            hasThumb = true;
         }
 
-        item.innerHTML = `
-            <div class="asset-icon-box">${iconSvg}</div>
-            <div class="asset-info">
-                <div class="asset-name" title="${asset.name}">${asset.name}</div>
-                <div class="asset-meta">
-                    <span class="asset-category">${asset.category}</span>
+        let thumbHtml = '';
+        const canvasId = `wave_${asset.id}`;
+        
+        if (isAudio) {
+            thumbHtml = `<canvas class="waveform-canvas" id="${canvasId}"></canvas>`;
+        } else if (hasThumb) {
+            thumbHtml = `
+                <img src="${thumbUrl}" class="card-thumb-image-blur" />
+                <img src="${thumbUrl}" class="card-thumb-image" />
+            `;
+        } else {
+            let gradient = 'from-violet-900/20 to-blue-900/10';
+            let iconText = '🎥';
+            if (isImage) {
+                gradient = 'from-pink-900/15 to-cyan-900/10';
+                iconText = '🎨';
+            } else if (asset.category === "ARCHIVE") {
+                gradient = 'from-slate-900/30 to-slate-800/10';
+                iconText = '📦';
+            }
+            
+            thumbHtml = `
+                <div class="absolute inset-0 bg-gradient-to-tr ${gradient} flex items-center justify-center" style="font-size: 24px;">
+                    ${iconText}
+                </div>
+            `;
+        }
+
+        // Duration badge
+        const durationHtml = asset.duration ? `<span class="duration-badge">${formatDuration(asset.duration)}</span>` : '';
+        
+        // Category badge classes
+        const catClass = `category-badge badge-${asset.category.toLowerCase()}`;
+        const catLabel = asset.category.replace('_', ' ');
+
+        card.innerHTML = `
+            <div class="card-thumb-area">
+                ${thumbHtml}
+                ${durationHtml}
+                <span class="${catClass}">${catLabel}</span>
+                <div class="card-play-overlay">
+                    <div class="play-btn-circle">
+                        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="0" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                    </div>
+                </div>
+                ${isVideo ? `<video class="card-video" muted playsinline></video>` : ''}
+            </div>
+            <div class="card-details">
+                <div class="card-title" title="${asset.name}">${asset.name}</div>
+                <div class="card-meta">
                     <span>${formatBytes(asset.size)}</span>
                 </div>
             </div>
         `;
         
-        // Single click imports file directly into active Premiere Pro project
-        item.addEventListener('click', () => {
+        // Asynchronously render custom audio waveforms
+        if (isAudio && asset.path) {
+            const canvas = card.querySelector('.waveform-canvas');
+            drawAudioWaveform(asset.path, canvas, asset.id);
+            setupAudioCardListeners(card, asset, canvas);
+        }
+
+        // Video hover preview interaction
+        if (isVideo && asset.path) {
+            const video = card.querySelector('.card-video');
+            let playTimeout = null;
+
+            card.addEventListener('mouseenter', () => {
+                playTimeout = setTimeout(() => {
+                    video.src = formatFileUrl(asset.path);
+                    video.classList.add('playing');
+                    video.play().catch(e => console.error("Video play fail", e));
+                }, 200);
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                if (playTimeout) clearTimeout(playTimeout);
+                video.pause();
+                video.classList.remove('playing');
+                video.src = ''; // Clear source to unlock the file immediately
+            });
+        }
+
+        // Single click to import asset directly to Premiere Pro
+        card.addEventListener('click', (e) => {
             importToPremiere(asset.path);
         });
         
-        scrollArea.appendChild(item);
+        scrollArea.appendChild(card);
     });
 }
 
@@ -229,7 +1109,6 @@ function renderAssets(assets) {
 function importToPremiere(filePath) {
     if (!filePath) return;
     
-    // Check if file actually exists
     if (!fs.existsSync(filePath)) {
         alert("File does not exist on disk: " + filePath);
         return;
@@ -264,8 +1143,7 @@ function renderEmptyState(title, text) {
 
 // Event Listeners
 projectSelect.addEventListener('change', (e) => {
-    currentProjectId = e.target.value;
-    loadAssets(currentProjectId);
+    loadAssets(e.target.value);
 });
 
 searchInput.addEventListener('input', () => {

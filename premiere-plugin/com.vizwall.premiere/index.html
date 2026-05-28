@@ -145,6 +145,11 @@
             pointer-events: none;
         }
 
+        .sort-wrapper {
+            width: 130px !important;
+            flex-shrink: 0;
+        }
+
         /* Controls Row */
         .controls-row {
             display: flex;
@@ -185,6 +190,7 @@
         .search-container {
             position: relative;
             flex-grow: 1;
+            min-width: 80px;
         }
 
         .search-input {
@@ -282,23 +288,23 @@
             background-color: rgba(6, 5, 10, 0.3);
         }
 
-        /* Sidebar folders panel */
+        /* Sidebar folders panel - docked */
         .sidebar-panel {
-            position: absolute;
-            top: 0;
-            left: -200px; /* Hidden by default */
-            width: 185px;
+            width: 0px; /* Hidden by default */
             height: 100%;
             background-color: #0d0b17;
-            border-right: 1px solid rgba(255, 255, 255, 0.08);
-            z-index: 10;
-            transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border-right: 0px solid rgba(255, 255, 255, 0.08);
             display: flex;
             flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
         }
 
         .sidebar-panel.open {
-            left: 0;
+            width: 175px; /* Docked width */
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .sidebar-header {
@@ -498,6 +504,14 @@
             opacity: 1;
         }
 
+        .waveform-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
         .duration-badge {
             position: absolute;
             bottom: 4px;
@@ -664,7 +678,7 @@
             
             <!-- Controls Row -->
             <div class="controls-row">
-                <button id="toggleSidebarBtn" class="control-btn" title="Open Library Folders">
+                <button id="toggleSidebarBtn" class="control-btn open active" title="Open Library Folders">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                     </svg>
@@ -678,6 +692,18 @@
                     <input type="text" id="searchInput" class="search-input" placeholder="Search assets..." disabled>
                 </div>
                 
+                <!-- Sort Dropdown -->
+                <div class="select-wrapper sort-wrapper">
+                    <select id="sortSelect">
+                        <option value="created_at-desc">Date Added (Newest)</option>
+                        <option value="created_at-asc">Date Added (Oldest)</option>
+                        <option value="name-asc">Name A-Z</option>
+                        <option value="name-desc">Name Z-A</option>
+                        <option value="size-desc">File Size (Max)</option>
+                        <option value="size-asc">File Size (Min)</option>
+                    </select>
+                </div>
+
                 <div class="grid-slider-container">
                     <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" class="slider-icon" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="7" height="7"></rect>
@@ -698,10 +724,10 @@
 
         <!-- Main split screen viewport -->
         <div class="main-content-layout">
-            <!-- Left Sidebar Drawer -->
-            <div id="sidebar" class="sidebar-panel">
+            <!-- Left Sidebar Drawer (Docked & Open on load) -->
+            <div id="sidebar" class="sidebar-panel open">
                 <div class="sidebar-header">
-                    <span>Library Folders</span>
+                    <span>Folders</span>
                     <button id="closeSidebarBtn">&times;</button>
                 </div>
                 <div id="folderTree" class="folder-tree">
