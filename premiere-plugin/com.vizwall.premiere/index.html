@@ -669,11 +669,20 @@
 
         <!-- Filters -->
         <div class="filters">
-            <!-- Project Dropdown -->
-            <div class="select-wrapper">
-                <select id="projectSelect" disabled>
-                    <option value="">Select Project...</option>
-                </select>
+            <!-- Project Dropdown and Import Project Button -->
+            <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+                <div class="select-wrapper" style="flex-grow: 1; min-width: 0;">
+                    <select id="projectSelect" disabled>
+                        <option value="">Select Project...</option>
+                    </select>
+                </div>
+                <button id="importProjectBtn" class="control-btn" style="width: auto; padding: 0 10px; font-size: 11px; font-weight: 600; gap: 4px; display: none; height: 32px; align-items: center; justify-content: center; flex-shrink: 0;" title="Import whole project structure (ignoring non-media files)">
+                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                        <polyline points="9 17 4 12 9 7"></polyline>
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+                    </svg>
+                    <span>Import Project</span>
+                </button>
             </div>
             
             <!-- Controls Row -->

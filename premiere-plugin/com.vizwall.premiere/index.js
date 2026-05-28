@@ -20,6 +20,7 @@ const activeFolderName = document.getElementById('activeFolderName');
 const clearFolderFilterBtn = document.getElementById('clearFolderFilterBtn');
 const gridSlider = document.getElementById('gridSlider');
 const sortSelect = document.getElementById('sortSelect');
+const importProjectBtn = document.getElementById('importProjectBtn');
 
 let db = null;
 let SQL = null;
@@ -355,12 +356,14 @@ function loadAssets(projectId) {
         currentProjectPath = '';
         renderAssets([]);
         renderFolderTreeUI([]);
+        importProjectBtn.style.display = 'none';
         return;
     }
 
     currentProjectId = projectId;
     const proj = projectsMap[projectId];
     currentProjectPath = proj ? proj.path : '';
+    importProjectBtn.style.display = 'flex';
     
     if (projectId === "GLOBAL_LIBRARY") {
         console.log("Loading global library assets from:", libraryPath);
@@ -1153,6 +1156,53 @@ searchInput.addEventListener('input', () => {
 refreshBtn.addEventListener('click', () => {
     initDatabase();
 });
+
+importProjectBtn.addEventListener('click', () => {
+    importWholeProject();
+});
+
+function getAssetRelativeFolder(asset) {
+    if (!currentProjectPath) return '';
+    const normRoot = currentProjectPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const normAsset = asset.path.replace(/\\/g, '/');
+    const normAssetLower = normAsset.toLowerCase();
+    
+    let rel = normAsset;
+    if (normRoot && normAssetLower.startsWith(normRoot)) {
+        rel = normAsset.slice(normRoot.length).replace(/^[/\\]+/, '');
+    } else {
+        rel = normAsset.split('/').pop() || normAsset;
+    }
+    
+    const parts = rel.split('/');
+    parts.pop(); // Remove filename
+    return parts.join('/');
+}
+
+function importWholeProject() {
+    const mediaCategories = ["A_ROLL", "B_ROLL", "AUDIO", "MUSIC", "SFX", "VOICEOVER", "GRAPHICS", "THUMBNAILS"];
+    const validAssets = getDisplayAssets().filter(asset => mediaCategories.includes(asset.category));
+    
+    if (validAssets.length === 0) {
+        alert("No media files found in this project to import.");
+        return;
+    }
+    
+    // Confirm import with user
+    const msg = `Import all ${validAssets.length} media files and create their corresponding folder structure in Premiere Pro? (Non-media files will be ignored)`;
+    if (!confirm(msg)) return;
+    
+    // Serialize data
+    const serialized = validAssets.map(asset => {
+        return asset.path + '|||' + getAssetRelativeFolder(asset);
+    }).join('///');
+    
+    const cs = new CSInterface();
+    cs.evalScript(`importAllAssets("${escapePath(serialized)}")`, (response) => {
+        console.log("ExtendScript batch import response:", response);
+        alert(response);
+    });
+}
 
 // Initialize on load
 window.onload = () => {
