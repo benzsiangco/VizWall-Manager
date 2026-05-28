@@ -20,10 +20,9 @@
             color: #ffffff;
             font-size: 13px;
             overflow-x: hidden;
-            overflow-y: auto;
+            overflow-y: hidden;
             height: 100vh;
             display: flex;
-            flex-col: column;
             flex-direction: column;
         }
 
@@ -59,6 +58,7 @@
             justify-content: space-between;
             padding-bottom: 6px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            flex-shrink: 0;
         }
         
         .logo-section {
@@ -101,6 +101,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            flex-shrink: 0;
         }
 
         .select-wrapper {
@@ -144,10 +145,46 @@
             pointer-events: none;
         }
 
+        /* Controls Row */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .control-btn {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            outline: none;
+        }
+
+        .control-btn:hover {
+            background-color: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.3);
+            color: #a78bfa;
+        }
+
+        .control-btn.active {
+            background-color: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.5);
+            color: #a78bfa;
+        }
+
         /* Search input */
         .search-container {
             position: relative;
-            width: 100%;
+            flex-grow: 1;
         }
 
         .search-input {
@@ -180,102 +217,382 @@
             fill: none;
         }
 
-        /* Scroll Area */
-        .scroll-area {
-            flex-1: 1;
-            flex-grow: 1;
-            overflow-y: auto;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 10px;
-            background-color: rgba(6, 5, 10, 0.3);
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            min-height: 100px;
-        }
-
-        /* Scrollbar styles */
-        .scroll-area::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .scroll-area::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .scroll-area::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-        }
-
-        .scroll-area::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Asset Items */
-        .asset-item {
+        /* Grid sizing slider */
+        .grid-slider-container {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 10px;
-            background-color: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .asset-item:hover {
-            background-color: rgba(139, 92, 246, 0.08);
-            border-color: rgba(139, 92, 246, 0.2);
-        }
-
-        .asset-icon-box {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
+            gap: 4px;
             background-color: rgba(255, 255, 255, 0.03);
-            color: #a78bfa;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 0 8px;
+            height: 32px;
             flex-shrink: 0;
         }
 
-        .asset-info {
+        .slider-icon {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .grid-slider {
+            width: 50px;
+            background: transparent;
+            cursor: pointer;
+            outline: none;
+            accent-color: #8b5cf6;
+        }
+
+        /* Active Filter Row */
+        .active-folder-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: rgba(139, 92, 246, 0.08);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 10.5px;
+            color: #a78bfa;
+            font-weight: 500;
+        }
+
+        .clear-folder-btn {
+            background: none;
+            border: none;
+            color: #a78bfa;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            outline: none;
+        }
+
+        .clear-folder-btn:hover {
+            color: #fff;
+        }
+
+        /* Main split-screen layout */
+        .main-content-layout {
+            display: flex;
             flex-grow: 1;
-            min-width: 0;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            background-color: rgba(6, 5, 10, 0.3);
+        }
+
+        /* Sidebar folders panel */
+        .sidebar-panel {
+            position: absolute;
+            top: 0;
+            left: -200px; /* Hidden by default */
+            width: 185px;
+            height: 100%;
+            background-color: #0d0b17;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 10;
+            transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-panel.open {
+            left: 0;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-header button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 16px;
+            cursor: pointer;
+            line-height: 1;
+            outline: none;
+        }
+
+        .sidebar-header button:hover {
+            color: #fff;
+        }
+
+        .folder-tree {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 6px;
             display: flex;
             flex-direction: column;
             gap: 2px;
         }
 
-        .asset-name {
+        /* Tree Item Styles */
+        .tree-node-row {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tree-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            color: rgba(255, 255, 255, 0.5);
+            background: transparent;
+            border: none;
+            text-align: left;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            outline: none;
+        }
+
+        .tree-item:hover {
+            color: rgba(255, 255, 255, 0.85);
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+
+        .tree-item.selected {
+            color: #a78bfa;
+            background-color: rgba(139, 92, 246, 0.12);
+            font-weight: 500;
+            border-left: 2px solid #8b5cf6;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .tree-chevron {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 10px;
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.25);
+            transition: transform 0.2s ease;
+        }
+
+        .tree-chevron.open {
+            transform: rotate(90deg);
+        }
+
+        .tree-icon {
+            font-size: 12px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .tree-count {
+            margin-left: auto;
+            font-size: 9px;
+            font-family: monospace;
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Scroll Area Layout */
+        .scroll-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: repeat(var(--grid-cols, 2), 1fr);
+            grid-auto-rows: min-content;
+            gap: 8px;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Scrollbar styles */
+        .scroll-area::-webkit-scrollbar, .folder-tree::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scroll-area::-webkit-scrollbar-track, .folder-tree::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .scroll-area::-webkit-scrollbar-thumb, .folder-tree::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 3px;
+        }
+
+        .scroll-area::-webkit-scrollbar-thumb:hover, .folder-tree::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Grid Cards */
+        .asset-card {
+            position: relative;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background-color: rgba(14, 12, 26, 0.6);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .asset-card:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+        }
+
+        .card-thumb-area {
+            aspect-ratio: 16/9;
+            width: 100%;
+            position: relative;
+            background-color: #000;
+            overflow: hidden;
+        }
+
+        .card-thumb-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .card-thumb-image.contain {
+            object-fit: contain;
+        }
+
+        .card-thumb-image-blur {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.3;
+            filter: blur(8px);
+            scale: 1.1;
+            pointer-events: none;
+        }
+
+        .card-video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            background-color: #000;
+        }
+
+        .card-video.playing {
+            opacity: 1;
+        }
+
+        .duration-badge {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            font-size: 8px;
+            font-family: monospace;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 1px 3px;
+            border-radius: 3px;
+            color: rgba(255, 255, 255, 0.85);
+            z-index: 2;
+        }
+
+        .category-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            font-size: 8px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        /* Category colors */
+        .badge-a_roll { background-color: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-b_roll { background-color: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .badge-audio { background-color: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-voiceover { background-color: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); }
+        .badge-sfx { background-color: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .badge-music { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-graphics { background-color: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+        .badge-thumbnails { background-color: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }
+        .badge-exports { background-color: rgba(20, 184, 166, 0.15); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.3); }
+        .badge-project_files { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-archive { background-color: rgba(100, 116, 139, 0.15); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
+
+        .card-play-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1;
+        }
+
+        .asset-card:hover .card-play-overlay {
+            opacity: 1;
+        }
+
+        .play-btn-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .play-btn-circle svg {
+            margin-left: 2px;
+            fill: #fff;
+        }
+
+        .card-details {
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 11px;
             font-weight: 500;
             color: rgba(255, 255, 255, 0.9);
-            font-size: 11.5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .asset-meta {
+        .card-meta {
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: space-between;
             font-size: 9px;
-            color: rgba(255, 255, 255, 0.35);
-        }
-
-        .asset-category {
-            background-color: rgba(139, 92, 246, 0.15);
-            color: #c084fc;
-            padding: 1px 4px;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 8px;
-            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
         }
 
         /* Empty State */
@@ -288,6 +605,7 @@
             color: rgba(255, 255, 255, 0.25);
             text-align: center;
             gap: 8px;
+            grid-column: 1 / -1;
             height: 100%;
         }
 
@@ -310,6 +628,7 @@
             background-color: rgba(0, 0, 0, 0.2);
             border-radius: 6px;
             border: 1px solid rgba(255, 255, 255, 0.03);
+            flex-shrink: 0;
         }
 
         .footer-action {
@@ -329,10 +648,7 @@
         <!-- Header -->
         <div class="header">
             <div class="logo-section">
-                <svg class="logo-icon" viewBox="0 0 24 24">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-                </svg>
-                <span class="title">VizWall Workspace</span>
+                <img src="vizwall-logo.png" alt="VizWall Workspace" style="height: 18px; width: auto; object-fit: contain; display: block;" />
             </div>
             <div id="statusDot" class="status-dot" title="Workspace Database Not Connected"></div>
         </div>
@@ -346,25 +662,64 @@
                 </select>
             </div>
             
-            <!-- Search -->
-            <div class="search-container">
-                <svg class="search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input type="text" id="searchInput" class="search-input" placeholder="Search assets..." disabled>
+            <!-- Controls Row -->
+            <div class="controls-row">
+                <button id="toggleSidebarBtn" class="control-btn" title="Open Library Folders">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </button>
+                
+                <div class="search-container">
+                    <svg class="search-icon" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search assets..." disabled>
+                </div>
+                
+                <div class="grid-slider-container">
+                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" class="slider-icon" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <input type="range" id="gridSlider" min="1" max="4" value="2" class="grid-slider" title="Resize Grid">
+                </div>
+            </div>
+            
+            <!-- Active filter folder indicator -->
+            <div id="activeFolderRow" class="active-folder-row" style="display: none;">
+                <span id="activeFolderName">All Files</span>
+                <button id="clearFolderFilterBtn" class="clear-folder-btn" title="Clear folder filter">&times;</button>
             </div>
         </div>
 
-        <!-- Scrollable Asset Area -->
-        <div id="scrollArea" class="scroll-area">
-            <div class="empty-state">
-                <svg class="empty-icon" viewBox="0 0 24 24">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="9" y1="3" x2="9" y2="21"></line>
-                </svg>
-                <div>No database connected</div>
-                <div style="font-size: 10px; color: rgba(255, 255, 255, 0.15);">Ensure the main app has run once to initialize database.</div>
+        <!-- Main split screen viewport -->
+        <div class="main-content-layout">
+            <!-- Left Sidebar Drawer -->
+            <div id="sidebar" class="sidebar-panel">
+                <div class="sidebar-header">
+                    <span>Library Folders</span>
+                    <button id="closeSidebarBtn">&times;</button>
+                </div>
+                <div id="folderTree" class="folder-tree">
+                    <!-- Tree rendered dynamically -->
+                </div>
+            </div>
+            
+            <!-- Right Asset Grid Area -->
+            <div id="scrollArea" class="scroll-area" style="--grid-cols: 2;">
+                <div class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <div>No database connected</div>
+                    <div style="font-size: 10px; color: rgba(255, 255, 255, 0.15);">Ensure the main app has run once to initialize database.</div>
+                </div>
             </div>
         </div>
 
