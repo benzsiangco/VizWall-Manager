@@ -56,6 +56,7 @@ fn main() {
             commands::pick_folder_dialog,
             commands::pick_file_dialog,
             commands::open_in_editor,
+            commands::launch_app,
             commands::reveal_in_explorer,
             commands::generate_thumbnail,
             commands::get_ffmpeg_status,

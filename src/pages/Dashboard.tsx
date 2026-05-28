@@ -12,6 +12,7 @@ import { useProjectStore } from "../stores/useProjectStore";
 import {
   apiGetAllDiskStats, apiGetActivityHeatmap,
   apiGetProjectExports, apiGetProjectRevisions,
+  apiLaunchApp,
   DiskStats, Asset, Project, ActivityHeatmap, isTauri,
 } from "../lib/tauri";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -831,11 +832,15 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-[11px] font-bold text-white/35 uppercase tracking-widest font-outfit mb-2 px-1">Connections</h3>
           <div className="space-y-2">
             {/* Premiere Pro */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+            <div 
+              onClick={() => apiLaunchApp("premiere")}
+              title="Click to open Adobe Premiere Pro"
+              className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-violet-500/30 hover:bg-white/[0.05] transition-all cursor-pointer group"
+            >
               <div className="flex items-center gap-2.5 min-w-0">
-                <img src="/premiere-pro.png" alt="Premiere Pro" className="w-5 h-5 object-contain rounded" />
+                <img src="/premiere-pro.png" alt="Premiere Pro" className="w-5 h-5 object-contain rounded group-hover:scale-105 transition-transform" />
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-white/80 leading-tight">Adobe Premiere Pro</p>
+                  <p className="text-[10px] font-semibold text-white/80 leading-tight group-hover:text-violet-400 transition-colors">Adobe Premiere Pro</p>
                   <p className="text-[8px] text-white/35 mt-0.5 leading-none">CEP Extension active</p>
                 </div>
               </div>
@@ -846,17 +851,21 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* DaVinci Resolve */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+            <div 
+              onClick={() => apiLaunchApp("davinci")}
+              title="Click to open DaVinci Resolve (Coming Soon)"
+              className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-violet-500/30 hover:bg-white/[0.05] transition-all cursor-pointer group"
+            >
               <div className="flex items-center gap-2.5 min-w-0">
-                <img src="/DaVinci-Resolve-Logo.tif" alt="DaVinci Resolve" className="w-5 h-5 object-contain rounded" />
+                <img src="/DaVinci_Resolve_Studio.png" alt="DaVinci Resolve" className="w-5 h-5 object-contain rounded group-hover:scale-105 transition-transform" />
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-white/80 leading-tight">DaVinci Resolve</p>
-                  <p className="text-[8px] text-white/35 mt-0.5 leading-none">Workflow Integration</p>
+                  <p className="text-[10px] font-semibold text-white/80 leading-tight group-hover:text-violet-400 transition-colors">DaVinci Resolve</p>
+                  <p className="text-[8px] text-white/35 mt-0.5 leading-none font-medium">Coming Soon</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shadow-[0_0_6px_#8b5cf6]" />
-                <span className="text-[8px] font-bold text-violet-400 uppercase tracking-wider font-mono">Ready</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">Coming Soon</span>
               </div>
             </div>
           </div>

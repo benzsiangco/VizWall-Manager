@@ -1,4 +1,4 @@
-﻿use crate::database::DbState;
+use crate::database::DbState;
 use crate::models::*;
 use rusqlite::params;
 use std::collections::HashMap;
@@ -1212,6 +1212,68 @@ pub fn open_in_editor(_editor_type: String, file_path: String) -> Result<(), Str
 
     // To provide a real implementation, we can open with default application (Resolve/Premiere projects open via association)
     open::that(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn launch_app(editor_type: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::Path;
+        let et = editor_type.to_lowercase();
+        if et == "premiere" {
+            let adobe_dir = Path::new("C:\\Program Files\\Adobe");
+            if adobe_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(adobe_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                if name.contains("Adobe Premiere Pro") {
+                                    let exe_path = path.join("Adobe Premiere Pro.exe");
+                                    if exe_path.exists() {
+                                        std::process::Command::new(exe_path).spawn().map_err(|e| e.to_string())?;
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            std::process::Command::new("cmd")
+                .args(&["/C", "start", "premiere"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        } else if et == "davinci" {
+            let resolve_path = Path::new("C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe");
+            if resolve_path.exists() {
+                std::process::Command::new(resolve_path).spawn().map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+            std::process::Command::new("cmd")
+                .args(&["/C", "start", "resolve"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let et = editor_type.to_lowercase();
+        if et == "premiere" {
+            std::process::Command::new("open")
+                .args(&["-a", "Adobe Premiere Pro"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        } else if et == "davinci" {
+            std::process::Command::new("open")
+                .args(&["-a", "DaVinci Resolve"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
     Ok(())
 }
 

@@ -671,6 +671,11 @@ export async function apiOpenInEditor(editorType: "premiere" | "resolve", filePa
   alert(`[Browser] Opening ${filePath} in ${editorType === "premiere" ? "Premiere Pro" : "DaVinci Resolve"}`);
 }
 
+export async function apiLaunchApp(editorType: "premiere" | "davinci"): Promise<void> {
+  if (isTauri()) return invoke("launch_app", { editorType });
+  alert(`[Browser] Launching ${editorType === "premiere" ? "Premiere Pro" : "DaVinci Resolve"}`);
+}
+
 export async function apiRevealInExplorer(filePath: string): Promise<void> {
   if (isTauri()) return invoke("reveal_in_explorer", { filePath });
   alert(`[Browser] Reveal in Explorer: ${filePath}`);
