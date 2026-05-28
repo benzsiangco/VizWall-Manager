@@ -137,6 +137,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     if (proj.thumbnail_path && isTauri()) return convertFileSrc(proj.thumbnail_path);
     return "";
   });
+  const [orientation, setOrientation] = useState<"portrait" | "landscape" | null>(null);
+
+  // Update thumbSrc when thumbnail_path changes (e.g. after auto-generation)
+  useEffect(() => {
+    if (proj.thumbnail_path && isTauri()) {
+      setThumbSrc(convertFileSrc(proj.thumbnail_path));
+    }
+  }, [proj.thumbnail_path]);
 
   const isVideoThumb = proj.thumbnail_path
     ? /\.(mp4|mov|mkv|avi|mxf)$/i.test(proj.thumbnail_path)
@@ -195,30 +203,46 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <GripVertical size={10} className="text-white/40" />
       </div>
 
-      {/* Thumbnail */}
-      <div className="aspect-video relative overflow-hidden bg-gradient-to-br from-violet-900/20 to-blue-900/10">
+      {/* Thumbnail — blurred bg fill + contained sharp image, handles portrait & landscape */}
+      <div className="aspect-video relative overflow-hidden bg-[#0a0910]">
         {thumbSrc && !playing && (
-          <img
-            src={thumbSrc}
-            alt=""
-            draggable={false}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            onError={() => setThumbSrc("")}
-          />
+          <>
+            {/* Blurred background fill for letterboxed/portrait content */}
+            <img
+              src={thumbSrc}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 w-full h-full object-cover opacity-30 blur-md scale-110 pointer-events-none"
+              onError={() => {}}
+            />
+            {/* Sharp foreground — contained so portrait thumbnails aren't cropped */}
+            <img
+              src={thumbSrc}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              onError={() => setThumbSrc("")}
+              onLoad={e => {
+                const img = e.currentTarget;
+                setOrientation(img.naturalHeight > img.naturalWidth ? "portrait" : "landscape");
+              }}
+            />
+          </>
         )}
         {isVideoThumb && proj.thumbnail_path && isTauri() && (
           <video
             ref={videoRef}
             src={playing ? convertFileSrc(proj.thumbnail_path) : undefined}
             className={cn(
-              "absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity",
+              "absolute inset-0 w-full h-full pointer-events-none transition-opacity",
+              orientation === "portrait" ? "object-contain" : "object-cover",
               playing ? "opacity-100" : "opacity-0"
             )}
             muted loop playsInline preload="none"
           />
         )}
         {!thumbSrc && !playing && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-gradient-to-br from-violet-900/20 to-blue-900/10">
             <FolderClosed size={18} className="text-violet-500/20" />
           </div>
         )}
@@ -778,9 +802,12 @@ export const KanbanBoard: React.FC<{ searchQuery?: string }> = ({ searchQuery = 
             transition: "transform 0.05s ease-out",
           }}
         >
-          <div className="aspect-video bg-gradient-to-br from-violet-900/30 to-blue-900/15 flex items-center justify-center">
+          <div className="aspect-video bg-[#0a0910] flex items-center justify-center relative overflow-hidden">
             {drag.card.thumbnail_path && isTauri() ? (
-              <img src={convertFileSrc(drag.card.thumbnail_path)} alt="" className="w-full h-full object-cover" onError={() => {}} />
+              <>
+                <img src={convertFileSrc(drag.card.thumbnail_path)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-md scale-110" onError={() => {}} />
+                <img src={convertFileSrc(drag.card.thumbnail_path)} alt="" className="absolute inset-0 w-full h-full object-contain" onError={() => {}} />
+              </>
             ) : (
               <FolderClosed size={20} className="text-violet-500/40" />
             )}
