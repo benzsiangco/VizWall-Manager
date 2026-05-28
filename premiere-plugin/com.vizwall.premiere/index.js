@@ -1442,7 +1442,24 @@ async function importWholeProject() {
             folderPrefix = "02 Footage"; // Default fallback
         }
         
-        const finalFolder = relativeFolder ? `${folderPrefix}/${relativeFolder}` : folderPrefix;
+        // Strip redundant top-level folder segments that duplicate the bin name.
+        // e.g. "MEDIA/B_ROLL" → "B_ROLL" (MEDIA is already implied by "02 Footage")
+        //      "AUDIO/Voiceovers" → "Voiceovers" (AUDIO is already implied by "03 Audio")
+        const REDUNDANT_ROOTS = [
+            'MEDIA', 'AUDIO', 'GRAPHICS', 'EXPORTS', 'IMPORTS',
+            'PROJECT_FILES', 'REVISIONS', 'DELIVERABLES', 'PROXIES',
+            'SOCIAL_MEDIA', 'BRANDING', 'PROJECT_INFO'
+        ];
+        let cleanFolder = relativeFolder;
+        if (cleanFolder) {
+            const parts = cleanFolder.split('/');
+            if (parts.length > 0 && REDUNDANT_ROOTS.includes(parts[0].toUpperCase())) {
+                parts.shift(); // remove the redundant root segment
+                cleanFolder = parts.join('/');
+            }
+        }
+        
+        const finalFolder = cleanFolder ? `${folderPrefix}/${cleanFolder}` : folderPrefix;
         const escapedPath = escapePath(asset.path);
         const escapedFolder = escapePath(finalFolder);
         
