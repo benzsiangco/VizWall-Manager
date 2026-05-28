@@ -3,27 +3,13 @@ import {
   LayoutDashboard, FolderClosed, FolderOpen, KanbanSquare,
   ChevronDown, ChevronRight, Plus, Users, Settings,
   HardDrive, FileOutput, GitBranch, Archive, Sparkles,
-  Pencil, Trash2, Check, X, Library, Info,
+  Pencil, Trash2, Check, X, Library,
 } from "lucide-react";
 import { useProjectStore } from "../stores/useProjectStore";
 import { useAssetStore } from "../stores/useAssetStore";
 import { useUiStore } from "../stores/useUiStore";
-import { apiGetGlobalLibrary, apiGetAppVersion, apiCheckForUpdates } from "../lib/tauri";
+import { apiGetGlobalLibrary } from "../lib/tauri";
 import { cn } from "../lib/utils";
-
-function isNewerVersion(current: string, latest: string): boolean {
-  const curClean = current.replace(/^v/, "");
-  const latClean = latest.replace(/^v/, "");
-  const curParts = curClean.split(".").map(Number);
-  const latParts = latClean.split(".").map(Number);
-  for (let i = 0; i < Math.max(curParts.length, latParts.length); i++) {
-    const curVal = curParts[i] || 0;
-    const latVal = latParts[i] || 0;
-    if (latVal > curVal) return true;
-    if (curVal > latVal) return false;
-  }
-  return false;
-}
 
 const STATUS_DOT: Record<string, string> = {
   "In Progress":   "bg-violet-500",
@@ -173,7 +159,7 @@ export const Sidebar: React.FC = () => {
     deleteProject, deleteClient, renameClient, renameProject,
   } = useProjectStore();
   const { fetchAssets, storageStats, assets } = useAssetStore();
-  const { activeTab, setActiveTab, setNewClientModalOpen, setNewProjectModalOpen, setAboutModalOpen, openLibrary, activeLibraryPath } = useUiStore();
+  const { activeTab, setActiveTab, setNewClientModalOpen, setNewProjectModalOpen, openLibrary, activeLibraryPath } = useUiStore();
 
   const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({});
   const [hoveredClient, setHoveredClient] = useState<string | null>(null);
@@ -181,88 +167,9 @@ export const Sidebar: React.FC = () => {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [libraryPath, setLibraryPath] = useState<string>("");
 
-  const [currentVersion, setCurrentVersion] = useState<string>("1.0.0");
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState<boolean>(false);
-  const { setUpdateModalOpen, setUpdateInfo } = useUiStore();
-
   useEffect(() => {
     apiGetGlobalLibrary().then(p => { if (p) setLibraryPath(p); }).catch(() => {});
-  }, [activeTab]); // refresh when settings tab is visited
-
-  useEffect(() => {
-    // Load current version
-    apiGetAppVersion().then(v => {
-      if (v) setCurrentVersion(v);
-    }).catch(() => {});
-
-    // Auto check updates on mount after 2.5 seconds
-    const timer = setTimeout(() => {
-      autoCheckUpdates();
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const autoCheckUpdates = async () => {
-    try {
-      const curVer = await apiGetAppVersion();
-      const latestRelease = await apiCheckForUpdates();
-      if (latestRelease && latestRelease.tag_name) {
-        if (isNewerVersion(curVer, latestRelease.tag_name)) {
-          // Find setup asset (.exe or .msi)
-          const setupAsset = latestRelease.assets?.find((a: any) => 
-            a.name.toLowerCase().endsWith(".exe") || a.name.toLowerCase().endsWith(".msi")
-          );
-          if (setupAsset) {
-            setUpdateInfo({
-              version: latestRelease.tag_name,
-              name: latestRelease.name || latestRelease.tag_name,
-              notes: latestRelease.body || "",
-              url: setupAsset.browser_download_url
-            });
-            setUpdateModalOpen(true);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Auto update check failed:", e);
-    }
-  };
-
-  const manualCheckUpdates = async () => {
-    if (isCheckingUpdates) return;
-    setIsCheckingUpdates(true);
-    try {
-      const curVer = await apiGetAppVersion();
-      const latestRelease = await apiCheckForUpdates();
-      if (latestRelease && latestRelease.tag_name) {
-        if (isNewerVersion(curVer, latestRelease.tag_name)) {
-          const setupAsset = latestRelease.assets?.find((a: any) => 
-            a.name.toLowerCase().endsWith(".exe") || a.name.toLowerCase().endsWith(".msi")
-          );
-          if (setupAsset) {
-            setUpdateInfo({
-              version: latestRelease.tag_name,
-              name: latestRelease.name || latestRelease.tag_name,
-              notes: latestRelease.body || "",
-              url: setupAsset.browser_download_url
-            });
-            setUpdateModalOpen(true);
-          } else {
-            alert("No installer asset found in the latest release.");
-          }
-        } else {
-          alert("You are on the latest version! (" + curVer + ")");
-        }
-      } else {
-        alert("You are on the latest version! (" + curVer + ")");
-      }
-    } catch (e) {
-      console.error("Manual update check failed:", e);
-      alert("Failed to check for updates: " + e);
-    } finally {
-      setIsCheckingUpdates(false);
-    }
-  };
+  }, [activeTab]);
 
   const toggleClient = (id: string) =>
     setExpandedClients(prev => ({ ...prev, [id]: !prev[id] }));
@@ -378,12 +285,6 @@ export const Sidebar: React.FC = () => {
           )}
         >
           <Settings size={15} /> Settings
-        </button>
-        <button
-          onClick={() => setAboutModalOpen(true)}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-white/50 hover:text-white/85 hover:bg-white/[0.04]"
-        >
-          <Info size={15} /> About
         </button>
       </div>
 
@@ -551,23 +452,6 @@ export const Sidebar: React.FC = () => {
           <p className="text-[9px] text-white/20 font-mono mt-1">{storageStats?.total_files ?? 0} files indexed</p>
         </div>
       )}
-
-      {/* Version and Updates */}
-      <div className="px-4 py-2 mt-auto border-t border-white/[0.04] bg-[#08070d]/30 flex items-center justify-between">
-        <span className="text-[10px] text-white/20 font-mono">
-          v{currentVersion}
-        </span>
-        <button
-          onClick={manualCheckUpdates}
-          disabled={isCheckingUpdates}
-          className="text-[9px] font-semibold text-violet-400 hover:text-violet-300 transition-colors uppercase tracking-wider flex items-center gap-1 hover:underline disabled:opacity-50"
-        >
-          {isCheckingUpdates && (
-            <span className="w-2.5 h-2.5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin inline-block" />
-          )}
-          {isCheckingUpdates ? "Checking..." : "Check Update"}
-        </button>
-      </div>
 
       {/* Context menu */}
       {contextMenu && (
