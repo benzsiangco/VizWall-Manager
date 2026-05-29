@@ -655,6 +655,8 @@ export const KanbanBoard: React.FC<{ searchQuery?: string }> = ({ searchQuery = 
   const openProject = (projectId: string) => {
     setActiveProjectId(projectId);
     fetchAssets(projectId);
+    // Close library mode so the workspace shows the project, not the global library
+    useUiStore.getState().closeLibrary();
     setActiveTab("workspace");
   };
 

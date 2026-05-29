@@ -220,7 +220,6 @@ export const Sidebar: React.FC = () => {
 
   const NAV = [
     { id: "dashboard",  label: "Dashboard",       icon: <LayoutDashboard size={15} /> },
-    { id: "workspace",  label: "Asset Workspace", icon: <FolderOpen size={15} /> },
     { id: "pipeline",   label: "Pipeline",        icon: <KanbanSquare size={15} /> },
     { id: "revisions",  label: "Revisions",       icon: <GitBranch size={15} /> },
     { id: "exports",    label: "Exports",         icon: <FileOutput size={15} /> },
